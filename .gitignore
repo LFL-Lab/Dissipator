@@ -6,6 +6,9 @@
 # VISA drivers
 MUNIN11/VISAdrivers
 
+# spyder project files
+.spyproject*
+
 # Node artifact files
 node_modules/
 dist/
