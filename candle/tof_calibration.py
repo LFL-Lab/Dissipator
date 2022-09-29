@@ -2,9 +2,10 @@ from qm import SimulationConfig
 from qm.qua import *
 from qm import LoopbackInterface
 from qm.QuantumMachinesManager import QuantumMachinesManager
-from config_MUN11 import config
+from config import config
 import matplotlib.pyplot as plt
 import numpy as np
+from VISAdrivers import LO845m as LO
 
 # communicate with the server, and create qmm API
 qmm = QuantumMachinesManager()
@@ -24,6 +25,10 @@ qmm = QuantumMachinesManager()
 # ###################
 # # The QUA program #
 # ###################
+
+# qLO = LO.LO()
+
+
 with program() as tof_cal:
         
     n = declare(int)
@@ -33,14 +38,14 @@ with program() as tof_cal:
     # measure("readout", "rr", adc_st)
     
 
-    with for_(n, 0, n < 100, n + 1):
+    with for_(n, 0, n < 1000, n + 1):
         reset_phase("rr")
         measure("readout", "rr", adc_st)
         wait(50000, "rr")
         
     with stream_processing():
-        adc_st.input1().save("adc1")
-        adc_st.input2().save("adc2")
+        adc_st.input1().average().save("adc1")
+        adc_st.input2().average().save("adc2")
 
 # ######################################
 # # Open Communication with the Server #

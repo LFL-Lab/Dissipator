@@ -21,11 +21,10 @@ import Labber
 #########
 
 client = Labber.connectToServer()
-
-LO = client.connectToInstrument('SignalCore SC5511A Signal Generator', dict(name='10002F1D', startup = 'Get config'))
+LO = client.connectToInstrument('BNC 845 Signal Generator', dict(name='Readout', startup = 'Get config'))
 LO.startInstrument()
 
-DA = client.connectToInstrument('Vaunix Lab Brick Digital Attenuator',dict(interface='USB',address='26920'))
+DA = client.connectToInstrument('Vaunix Lab Brick Digital Attenuator',dict(interface='USB',address='26777'))
 DA.startInstrument()
 
 # SC = client.connectToInstrument('Keithley 2400 SourceMeter',dict(interface='GPIB',address='24'))
@@ -58,7 +57,8 @@ def run_resonator_spec(IF_min = 0.1e6,
                        df = 0.1e6,
                        n_avg = 500):
     
-    freqs = np.arange(IF_min, IF_max + df/2, df)
+    freqs = np.arange(IF_min, IF_max + df/2, df, dtype=int)
+    freqs_list = freqs.tolist()
     
     ### QUA code ###
     with program() as rr_spec:
@@ -72,9 +72,9 @@ def run_resonator_spec(IF_min = 0.1e6,
         
         with for_(n, 0, n < n_avg, n + 1):
             
-            with for_(f, IF_min, f < IF_max + df/2, f + df):
+            with for_each_(f, freqs_list):
                 update_frequency("rr", f)
-                wait(1000, "rr")
+                wait(25000, "rr")
                 measure("readout", "rr", None,
                         dual_demod.full("integW_cos", "out1", "integW_sin", "out2", I),
                         dual_demod.full("integW_minus_sin", "out1", "integW_cos", "out2", Q))
@@ -87,7 +87,7 @@ def run_resonator_spec(IF_min = 0.1e6,
         
     I, Q = getIQ(config, rr_spec)
     
-    return I, Q;
+    return freqs, I, Q;
 
 def run_resonator_spec_qubitpower(IF_min = 0.1e6, 
                                    IF_max = 400e6, 
@@ -114,9 +114,10 @@ def run_resonator_spec_qubitpower(IF_min = 0.1e6,
                 update_frequency('rr', f)
                 play("const" * amp(amp_q_scaling), "qubit", duration = 5000)
                 align('qubit', 'rr')
-                measure("readout", "rr", None,
-                        dual_demod.full("integW_cos", "out1", "integW_sin", "out2", I),
-                        dual_demod.full("integW_minus_sin", "out1", "integW_cos", "out2", Q))
+                measure("readout", "rr", None, *res_demod(I, Q))
+                # measure("readout", "rr", None,
+                #         dual_demod.full("integW_cos", "out1", "integW_minus_sin", "out2", I),
+                #         dual_demod.full("integW_sin", "out1", "integW_cos", "out2", Q))
                 wait(1000, 'rr')
                 save(I, I_st)
                 save(Q, Q_st)
@@ -132,9 +133,9 @@ def run_resonator_spec_qubitpower(IF_min = 0.1e6,
 
 def scan_resonator_spec(center = res,
                         attens = np.arange(50,0,-0.5), 
-                        span = 5e6, 
+                        span = 10e6, 
                         df = 0.01e6, 
-                        detuning = -50e6,
+                        detuning = 50e6,
                         n_avg = 100000,
                         save_traces=False):
     
@@ -159,7 +160,7 @@ def scan_resonator_spec(center = res,
         IF_min = detuning - span/2
         IF_max = detuning + span/2
         
-        I, Q = run_resonator_spec(IF_min, IF_max, df, n_avg)
+        _, I, Q = run_resonator_spec(IF_min, IF_max, df, n_avg)
         
         allI.append(I)
         allQ.append(Q)
@@ -181,7 +182,7 @@ def scan_resonator_spec(center = res,
     print(f"Figures saved to {foldername}")
     
     DA.setValue('Attenuation', prev_atten) # JL 09/15/2022 - resets DA value after atten sweep
-    return allI, allQ, freqs + rrLO, attens
+    return allI, allQ, freqs + rrLO, attens;
 
 
 
@@ -209,7 +210,7 @@ def scan_resonator_spec_qubitpower(center = res,
         IF_min = detuning - span/2
         IF_max = detuning + span/2
         
-        I, Q = run_resonator_spec_qubitpower(IF_min, IF_max, df, n_avg, amp_q_scaling = amp_q_scaling)
+        _, I, Q = run_resonator_spec_qubitpower(IF_min, IF_max, df, n_avg, amp_q_scaling = amp_q_scaling)
         
         allI.append(I)
         allQ.append(Q)

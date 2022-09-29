@@ -37,11 +37,20 @@ def sendslack(slack_id = f"<@{sacha_id}> ", message = "Measurement finished."):
 #########
 
 client = Labber.connectToServer()
-# qLO = client.connectToInstrument('SignalCore SC5506A Signal Generator', dict(name='10002A07', startup = 'Get config'))
-# qLO.startInstrument()
 
-rrLO = client.connectToInstrument('SignalCore SC5511A Signal Generator', dict(name='10002F1D', startup = 'Get config'))
+qLO = client.connectToInstrument('BNC 845 Signal Generator', dict(name='Qubit', startup = 'Get config'))
+qLO.startInstrument()
+qLO.setValue('Frequency', qb_LO)
+qLO.setValue('Output',True)
+config['elements']['qubit']['mixInputs']['lo_frequency'] = qb_LO
+config['mixers']['mixer_q1'][0]['lo_frequency'] = qb_LO
+
+rrLO = client.connectToInstrument('BNC 845 Signal Generator', dict(name='Readout', startup = 'Get config'))
 rrLO.startInstrument()
+rrLO.setValue('Frequency', rr_LO)
+rrLO.setValue('Output',True)
+config['elements']['rr']['mixInputs']['lo_frequency'] = rr_LO
+config['mixers']['mixer_rl1'][0]['lo_frequency'] = rr_LO
 
 # SC = client.connectToInstrument('Keithley 2400 SourceMeter',dict(interface='GPIB',address='24'))
 # SC.startInstrument()
@@ -65,7 +74,7 @@ if not os.path.isdir(foldername):
     os.mkdir(foldername);
 
 # other parameters
-saturation_dur = 5000 # time qubit saturated w/ qubit tone, in clock cycles; 12500 * 4 ns = 50 us
+saturation_dur = 25000 # time qubit saturated w/ qubit tone, in clock cycles; 12500 * 4 ns = 50 us
 wait_period = 5000 # wait time between experiments, in clock cycles; 50000 * 4 ns = 200 us
 
 res_ringdown_time = int(4e3 / 4) # ringdown time in nanoseconds / (4 ns / clockcycle)

@@ -4,11 +4,12 @@ Created on Thu Apr 14 11:35:33 2022
 
 @author: haimeng zhang <haimeng@usc.edu>
 """
+from VISAdrivers.LO845m import *
 from VISAdrivers.sa_api import *
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.signal import find_peaks
-from config_MUN11 import *
+from config import *
 from qm.qua import *
 from tqdm import tqdm
 
@@ -62,15 +63,19 @@ class mixer_calibration:
         signal = sa_get_sweep_64f(self.sa)
         # offset_marker = abs(freqs-marker)
         try:
-            index = self.find_peak(signal['max'], height=0.9*max(signal['max']),distance=span/2)
+            index = self.find_peak(signal['max'], height=max(signal['max']),distance=span/2)
             power = signal['max'][index[0]]
             bPeak = True
         except IndexError:
             print('peak not found')
             bPeak = False
             pass
+        
         if plot:
-            plt.plot(freqs, signal['max'],'-')
+            plt.plot(freqs*1e-6, signal['max'],'-')
+            plt.xlabel('Frequency (MHz)')
+            plt.ylabel('Power (dBm)')
+            plt.title('LO Leakage Measurement')
             if bPeak:
                 plt.plot(freqs[index], signal['max'][index], 'x')
             plt.show()
@@ -78,7 +83,33 @@ class mixer_calibration:
         
     
     def read_off_image_power(self,reference=-100,span=default_span, plot=False):
+        """
+        Sets frequency of unwanted sideband and gets power at that frequency
+
+        Parameters
+        ----------
+        reference : float, optional
+            The upper threshold of the spectrum analyzer. The default is -100.
+        span : TYPE, optional
+            DESCRIPTION. The default is default_span.
+        plot : TYPE, optional
+            DESCRIPTION. The default is False.
+
+        Raises
+        ------
+        ValueError
+            DESCRIPTION.
+
+        Returns
+        -------
+        freqs : TYPE
+            DESCRIPTION.
+        TYPE
+            DESCRIPTION.
+
+        """
         marker = self.LO_freq  - self.IF_freq
+            
         sa_config_acquisition(device = self.sa, detector = SA_AVERAGE, scale = SA_LOG_SCALE)
         sa_config_level(self.sa, reference)
         sa_config_gain_atten(self.sa, SA_AUTO_ATTEN, SA_AUTO_GAIN, True)
@@ -107,6 +138,9 @@ class mixer_calibration:
         if plot:
             plt.clf()
             plt.plot(freqs, signal['max'],'-')
+            plt.xlabel('Frequency (MHz)')
+            plt.ylabel('Power (dBm)')
+            plt.title('Image Power Measurement')
             if bPeak:
                 plt.plot(freqs[index], signal['max'][index], 'x')
             plt.show()

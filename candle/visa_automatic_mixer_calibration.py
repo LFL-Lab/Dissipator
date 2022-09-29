@@ -4,7 +4,7 @@ from qm.QuantumMachinesManager import QuantumMachinesManager
 import time
 import numpy as np
 import scipy.optimize as opti
-from instruments_MUN11 import *
+from instruments import *
 
 
 
@@ -16,10 +16,10 @@ calib = mixer_calibration(qm,mixer)
 
 ##### do DC offset calibration #####
 # get LO leakage power
-freqs, signals = calib.read_off_leakage_power(plot=True, reference=0) # reference should be set ABOVE expected image power
+freqs, signals = calib.read_off_leakage_power(plot=True, reference=-30) # reference should be set ABOVE expected image power
 
 # get signal
-calib.config_sa_sweep(calib.LO_freq, reference=0) # config the sa 
+calib.config_sa_sweep(calib.LO_freq, reference=-30) # config the sa 
 
 # do a coarse sweep
 values, argmin = calib.brute_force_search_dc_offsets(plot=True)
@@ -30,10 +30,10 @@ values, argmin = calib.brute_force_search_dc_offsets(Imin=-0.01, Imax=0.01, Qmin
 
 ##### do IQ imbalance calibration #####
 # get image power
-freqs, signals = calib.read_off_image_power(plot=True, reference=0) # reference should be set ABOVE expected image power
+freqs, signals = calib.read_off_image_power(plot=True, reference=-30) # reference should be set ABOVE expected image power
 
 # get signal
-calib.config_sa_sweep(calib.LO_freq-calib.IF_freq,reference=0) # config the sa 
+calib.config_sa_sweep(calib.LO_freq-calib.IF_freq,reference=-30) # config the sa 
 
 # do a coarse sweep
 values, argmin = calib.brute_force_search_imbalance(plot=True)

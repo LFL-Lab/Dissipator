@@ -8,7 +8,7 @@ from qm import LoopbackInterface
 from qm.QuantumMachinesManager import QuantumMachinesManager
 
 from config import *
-from meas_utilities import *
+from Utilities.measurement import *
 from fitting import *
 from plotting import *
 
@@ -22,6 +22,20 @@ import Labber
 #########
 
 client = Labber.connectToServer()
+
+qLO = client.connectToInstrument('BNC 845 Signal Generator', dict(name='Qubit', startup = 'Get config'))
+qLO.startInstrument()
+qLO.setValue('Frequency', qb_LO)
+qLO.setValue('Output',True)
+config['elements']['qubit']['mixInputs']['lo_frequency'] = qb_LO
+config['mixers']['mixer_q1'][0]['lo_frequency'] = qb_LO
+
+rrLO = client.connectToInstrument('BNC 845 Signal Generator', dict(name='Readout', startup = 'Get config'))
+rrLO.startInstrument()
+rrLO.setValue('Frequency', rr_LO)
+rrLO.setValue('Output',True)
+config['elements']['rr']['mixInputs']['lo_frequency'] = rr_LO
+config['mixers']['mixer_rl1'][0]['lo_frequency'] = rr_LO
 
 
 
@@ -45,6 +59,13 @@ res = resFreq # 7.026640e9 # estimated resonator frequency
 datapath = f'D:\\Users\\lfl\\data\\candle\\res_{resFreq/1e9}GHz\\'
 if not os.path.isdir(datapath):
     os.mkdir(datapath);
+    
+    
+def res_demod(I, Q):
+    
+    return (dual_demod.full("integW_cos", "out1", "integW_minus_sin", "out2", I),
+            dual_demod.full("integW_sin", "out1", "integW_cos", "out2", Q))
+
 
 ###################
 # The QUA program #
@@ -120,12 +141,12 @@ def T1(n_avg = 2000,
         
     I, Q = getIQ(config, T1Prog, showprogress=True, n_avg = n_avg)
     
-    plotIQ_quads(times * 4 / 1e3, I, Q, xlabel = "t (us)", title=title)
-    plt.savefig(name + ".png")
-    plt.close()
+    # plotIQ_quads(times * 4 / 1e3, I, Q, xlabel = "t (us)", title=title)
+    # plt.savefig(name + ".png")
+    # plt.close()
     
-    datadict = {"times" : times, "I" : I, "Q" : Q}
-    writedata(name + ".csv", datadict = datadict)
+    # datadict = {"times" : times, "I" : I, "Q" : Q}
+    # writedata(name + ".csv", datadict = datadict)
     
     # make fit plots
     for (quad, data) in zip(["I", "Q"], [I, Q]):
@@ -139,7 +160,9 @@ def T1(n_avg = 2000,
                           xlabel = "t (us)", ylabel = quad  + " (V)")
         # fit = perform_fit(times, I, fitfunc = expCosine, plot=True, freq_0 = 0.25);
         
+        fig.show()
         fig.savefig(name + "_" + quad + "fit.png")
+        fig.close()
         
         print(quad + " fit:\n")
         print(fit)
@@ -227,12 +250,31 @@ def ramsey(n_avg = 2000,
             
         
     I, Q = getIQ(config, ramseyProg, showprogress=True, n_avg = n_avg)
-    # fit = perform_fit(times, I, fitfunc = expCosine, plot=True, freq_0 = 0.25);
-
     
-    plotIQ_quads(times * 4, I, Q, xlabel = "t (ns)", title=title)
-    plt.savefig(name + ".png")
-    plt.close()
+    for (quad, data) in zip(["I", "Q"], [I, Q]):
+        
+        times = np.array(times) * 4 / 1e3; # times in microseconds
+        data = np.array(data); 
+        
+        fit, fig = perform_fit(expCosine, times, data, plot=True, 
+                          maketitle=True,
+                          title = "ramsey", precision = 4, 
+                          xlabel = "t (us)", ylabel = quad  + " (V)")
+        
+        fig.show()
+        fig.savefig(name + "_" + quad + "fit.png")
+        fig.close()
+        
+        print(quad + " fit:\n")
+        print(fit)
+        print("\n\n")
+      
+    
+    fit, fig = perform_fit(expCosine, times, data, plot=True, 
+                      maketitle=True, freq = 0.15,
+                      title = "T1", precision = 4, 
+                      xlabel = "t (us)", ylabel = quad  + " (V)")
+    
     
     datadict = {"times" : times, "I" : I, "Q" : Q}
     writedata(name + ".csv", datadict = datadict)

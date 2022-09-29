@@ -24,7 +24,7 @@ def delayed_gauss(amp, length, sigma):
 # CONSTANTS 
 ########
 
-R5 = int(7.2579e9)
+R5 = int(7.2578e9)
 Q5 = int(3.32402e9)
 
 R4 = int(7.22496e9)
@@ -43,8 +43,8 @@ Q1 = int(2.81718e9)
 R0 = int(7.11885e9)
 Q0 = int(2.8034e9)
 
-resFreq = R0
-qbFreq = Q0
+resFreq = R5
+qbFreq = Q5
 
 
 
@@ -56,10 +56,10 @@ qbFreq = Q0
 #####
 # resonator settings
 #####
-rr_LO = int(7.15e9) # don't forget to change this on the signal generator
-rr_imbalance = [-0.01931, -0.06207]
-rrI_analog_out = {"offset": -0.00862} # DC offset on I #-0.025
-rrQ_analog_out = {"offset":  0.00172} # DC offset on Q
+rr_LO = int(7.30e9) #int(7.2578e9) # don't forget to change this on the signal generator
+rr_imbalance = [0.015517241379310348, 0.025862068965517238]
+rrI_analog_out = {"offset": -0.0086} # DC offset on I #-0.025
+rrQ_analog_out = {"offset":  -0.00517} # DC offset on Q
 res_mixer_IQ_imbalance = IQ_imbalance(*rr_imbalance)
 
 rr_IF = resFreq - rr_LO
@@ -70,13 +70,13 @@ amp_r = 0.45 # amplitude of const and readout wfms in V, max is 0.5, but we shou
 # qubit settings
 #####
 if  qbFreq is Q5:
-    qb_LO = int(3.31e9)  # don't forget to change this on the signal generator
+    qb_LO = int(3.38e9)  # don't forget to change this on the signal generator
 
     # upper sideband
-    qubit_imbalance = [0.0776, -0.0776]
+    qubit_imbalance = [0.07758620689655174, -0.10862068965517241]
     qb_mixer_IQ_imbalance = IQ_imbalance(*qubit_imbalance)
-    qbI_analog_out = {"offset": -0.01552} 
-    qbQ_analog_out = {"offset": -0.01552} 
+    qbI_analog_out = {"offset": -0.015517241379310341} 
+    qbQ_analog_out = {"offset": -0.005172413793103445} 
     
     # lower sideband
     # qubit_imbalance = [0.0569, -0.06724]
@@ -84,9 +84,9 @@ if  qbFreq is Q5:
     # qbI_analog_out = {"offset": -0.01897} 
     # qbQ_analog_out = {"offset": -0.01552} 
     
-    pi_half_len = 192 # needs to be a multiple of 4, in ns unit
+    pi_half_len = 260 #192 # needs to be a multiple of 4, in ns unit
     pi_len = 2 * pi_half_len
-    pi_amp =  0.44 #0.274
+    pi_amp = 0.4383 #0.274
     
     qb_IF = qbFreq - qb_LO
     amp_q = 0.45 # 0.45 is the maximum, can make smaller to see if resonances change shape
@@ -206,7 +206,7 @@ if qbFreq is Q0:
 # other settings
 #####
 
-rr_pulse_len_in_clk = 500 # needs to be a multiple of 4
+rr_pulse_len_in_clk = 2500 # needs to be a multiple of 4
 
 phi = -0/180 * np.pi # the angle to rotate the IQ plane such that most of the information lies on a single quadrature
 
@@ -225,7 +225,10 @@ gauss_half_amp = gauss_amp / 2
 gauss_wf_4ns = delayed_gauss(gauss_amp, 4, 2)
 
 
-
+def res_demod(I, Q):
+    
+    return (dual_demod.full("integW_cos", "out1", "integW_minus_sin", "out2", I),
+            dual_demod.full("integW_sin", "out1", "integW_cos", "out2", Q))
 
 
 #####
@@ -239,15 +242,15 @@ config = {
         "con1": {
             "type": "opx1",
             "analog_outputs": {
-                1: rrI_analog_out,  # rr I
-                2: rrQ_analog_out,  # rr Q  
-                3: qbI_analog_out,  # qubit I
-                4: qbQ_analog_out,  # qubit Q
+                1: qbI_analog_out,  # qubit I
+                2: qbQ_analog_out,  # qubit Q
+                3: rrI_analog_out,  # rr I
+                4: rrQ_analog_out,  # rr Q  
             },
             "digital_outputs": {},
             "analog_inputs": {
-                1: {"offset": -0.09739892578125 - 0.002783935546875, "gain_db": 3},  # rr I
-                2: {"offset": -0.0818253173828125 + 0.0008167724609375, "gain_db": 3}  # rr Q
+                1: {"offset": -0.08991845070800782, "gain_db": 3},  # rr I
+                2: {"offset": -0.09040683835449219, "gain_db": 3}  # rr Q
             },
         },
     },
@@ -255,8 +258,8 @@ config = {
     "elements": {
         "qubit": {
             "mixInputs": {
-                "I": ("con1", 3),
-                "Q": ("con1", 4),
+                "I": ("con1", 1),
+                "Q": ("con1", 2),
                 "lo_frequency": qb_LO,
                 "mixer": "mixer_q1",
             },
@@ -277,8 +280,8 @@ config = {
         },
         "rr": {
             "mixInputs": {
-                "I": ("con1", 1),
-                "Q": ("con1", 2),
+                "I": ("con1", 3),
+                "Q": ("con1", 4),
                 "lo_frequency": rr_LO,
                 "mixer": "mixer_rl1",
             },
@@ -287,7 +290,7 @@ config = {
                 "out1": ("con1", 1),
                 "out2": ("con1", 2),
             },
-            "time_of_flight": 276, #288, # should be multiple of 4 (at least 24)
+            "time_of_flight": 224, # should be multiple of 4 (at least 24)
             "smearing": 0, # adds 40ns of data from each side of raw adc trace to account for ramp up and down of readout pulse
             "operations": {
                 "const": "const_pulse_IQ_rr",

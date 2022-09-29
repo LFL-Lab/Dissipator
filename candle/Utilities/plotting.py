@@ -6,11 +6,11 @@ import csv
 import seaborn as sns
 import pandas as pd
 
-from config_MUN11 import *
+from config import *
 
 
 # where figures are saved
-datapath = f'D:\\Users\\lfl\\data\\MUNIN11\\res_{resFreq/1e9}GHz\\'
+datapath = f'D:\\Users\\lfl\\data\\candle\\res_{resFreq/1e9}GHz\\'
 foldername = datapath + 'qubit_spec_figures\\'
 
 

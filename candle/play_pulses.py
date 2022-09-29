@@ -22,18 +22,21 @@ import Labber
 
 client = Labber.connectToServer()
 
-# qLO = client.connectToInstrument('SignalCore SC5506A Signal Generator', dict(name='10002A07', startup = 'Get config'))
-# qLO.startInstrument()
+qLO = client.connectToInstrument('BNC 845 Signal Generator', dict(name='Qubit', startup = 'Get config'))
+qLO.startInstrument()
+qLO.setValue('Frequency', qb_LO)
+qLO.setValue('Output',True)
+config['elements']['qubit']['mixInputs']['lo_frequency'] = qb_LO
+config['mixers']['mixer_q1'][0]['lo_frequency'] = qb_LO
 
-# qLO.setValue('RF1 frequency', qb_LO)
-# config['elements']['qubit']['mixInputs']['lo_frequency'] = qb_LO
-# config['mixers']['mixer_q1'][0]['lo_frequency'] = qb_LO
-
-rrLO = client.connectToInstrument('SignalCore SC5511A Signal Generator', dict(name='10002F1D', startup = 'Get config'))
+# rrLO = client.connectToInstrument('SignalCore SC5511A Signal Generator', dict(name='10002F1D', startup = 'Get config'))
+rrLO = client.connectToInstrument('BNC 845 Signal Generator', dict(name='Readout', startup = 'Get config'))
 rrLO.startInstrument()
 rrLO.setValue('Frequency', rr_LO)
+rrLO.setValue('Output',True)
 config['elements']['rr']['mixInputs']['lo_frequency'] = rr_LO
 config['mixers']['mixer_rl1'][0]['lo_frequency'] = rr_LO
+
 
 ###################
 # The QUA program #
@@ -42,8 +45,8 @@ config['mixers']['mixer_rl1'][0]['lo_frequency'] = rr_LO
 
 with program() as play_pulses:
     with infinite_loop_():
-        play("readout", "rr", duration=100)
         play("const", 'qubit',duration=100)
+        play("readout", "rr", duration=100)
 
     
 

@@ -3,8 +3,10 @@ restore_data_on_startup = True
 save_data_on_exit = True
 save_history = True
 save_non_project_files = False
+project_type = 'empty-project-type'
+recent_files = ['..\\.spyder-py3\\temp.py', 'MUNIN11\\play_pulses.py', '.gitignore']
 
 [main]
 version = 0.2.0
-recent_files = ['../../../.spyder-py3/temp.py', 'MUNIN11/process_data.py', 'MUNIN11/meas_utilities.py', 'MUNIN11/data_utilities.py', 'MUNIN11/fitting.py']
+recent_files = []
 
