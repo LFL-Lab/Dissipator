@@ -2,6 +2,7 @@ from scipy.signal.windows import gaussian
 import numpy as np
 from datetime import date
 # from qm.QuantumMachinesManager import QuantumMachinesManager
+from qm.qua import *
 
 today = date.today()
 datestr = today.strftime("%Y%m%d")

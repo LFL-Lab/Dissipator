@@ -263,4 +263,12 @@ def plot_sweep_data(foldername, subfoldername = lambda val: f'DC_bias_{val}_uA',
     plt.show()
         
     
-    
+
+
+# def calculate_readout_error(data, threshold, pstate = 'g'):
+#     if pstate == 'g':
+#         error = (data > threshold).sum()
+#     elif pstate == 'e':
+#         error = (data < threshold).sum()
+#     return error/len(data)
+
