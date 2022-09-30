@@ -109,7 +109,7 @@ def getIQ(config, jobtype,      showprogress = False,
 def plot_IQ_blobs_init():
     
     plot = sns.jointplot()
-    plot.set_axis_labels('I', 'Q')
+    plot.set_axis_labels('I (mV)', 'Q (mV)')
     plot.ax_marg_x.grid('on')
     plot.ax_marg_y.grid('on')
     plot.fig.tight_layout()
