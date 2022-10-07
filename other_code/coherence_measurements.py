@@ -14,33 +14,6 @@ from plotting import *
 
 import sys
 import os
-sys.path.append("D:\Program Files\Keysight\Labber\Script")
-import Labber
-
-#########
-# Connect to instrument through Labber
-#########
-
-client = Labber.connectToServer()
-
-qLO = client.connectToInstrument('BNC 845 Signal Generator', dict(name='Qubit', startup = 'Get config'))
-qLO.startInstrument()
-qLO.setValue('Frequency', qb_LO)
-qLO.setValue('Output',True)
-config['elements']['qubit']['mixInputs']['lo_frequency'] = qb_LO
-config['mixers']['mixer_q1'][0]['lo_frequency'] = qb_LO
-
-rrLO = client.connectToInstrument('BNC 845 Signal Generator', dict(name='Readout', startup = 'Get config'))
-rrLO.startInstrument()
-rrLO.setValue('Frequency', rr_LO)
-rrLO.setValue('Output',True)
-config['elements']['rr']['mixInputs']['lo_frequency'] = rr_LO
-config['mixers']['mixer_rl1'][0]['lo_frequency'] = rr_LO
-
-
-
-# SC = client.connectToInstrument('Keithley 2400 SourceMeter',dict(interface='GPIB',address='24'))
-# SC.startInstrument()
 
 ###################
 # The QUA program #

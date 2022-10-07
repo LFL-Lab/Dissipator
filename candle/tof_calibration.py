@@ -16,7 +16,7 @@ qmm = QuantumMachinesManager()
 # create a QUA program, that will later be excuted on the qm
 # with program() as test:g
 #     play("const", "qubit")
-    
+
 # simulate the QUA prog, and create a job API
 # job = qmm.simulate(config, test, SimulationConfig(1000))
 # samples = job.get_simulated_samples()
@@ -30,19 +30,19 @@ qmm = QuantumMachinesManager()
 
 
 with program() as tof_cal:
-        
+
     n = declare(int)
-    
+
     adc_st = declare_stream(adc_trace=True)
-    
+
     # measure("readout", "rr", adc_st)
-    
+
 
     with for_(n, 0, n < 1000, n + 1):
         reset_phase("rr")
         measure("readout", "rr", adc_st)
         wait(50000, "rr")
-        
+
     with stream_processing():
         adc_st.input1().average().save("adc1")
         adc_st.input2().average().save("adc2")
