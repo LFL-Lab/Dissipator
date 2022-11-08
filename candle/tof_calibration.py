@@ -6,39 +6,21 @@ from config import config
 import matplotlib.pyplot as plt
 import numpy as np
 from VISAdrivers import LO845m as LO
+import json
 
 # communicate with the server, and create qmm API
 qmm = QuantumMachinesManager()
 
-# open a new quantum machine on the server, and create an qm API
-# qm = qmm.open_qm(config)
-
-# create a QUA program, that will later be excuted on the qm
-# with program() as test:g
-#     play("const", "qubit")
-
-# simulate the QUA prog, and create a job API
-# job = qmm.simulate(config, test, SimulationConfig(1000))
-# samples = job.get_simulated_samples()
-# samples.con1.plot()
-
-# ###################
-# # The QUA program #
-# ###################
-
-# qLO = LO.LO()
-
+with open('pars.json', 'r') as openfile:
+    pars_dict = json.load(openfile)
 
 with program() as tof_cal:
 
     n = declare(int)
-
     adc_st = declare_stream(adc_trace=True)
-
-    # measure("readout", "rr", adc_st)
-
-
+    update_frequency('rr',10e6)
     with for_(n, 0, n < 1000, n + 1):
+
         reset_phase("rr")
         measure("readout", "rr", adc_st)
         wait(50000, "rr")
@@ -47,19 +29,6 @@ with program() as tof_cal:
         adc_st.input1().average().save("adc1")
         adc_st.input2().average().save("adc2")
 
-# ######################################
-# # Open Communication with the Server #
-# ######################################
-# qmm = QuantumMachinesManager()
-
-# ####################
-# # Simulate Program #
-# ####################
-# simulation_config = SimulationConfig(
-#                     duration=2000,
-#                     simulation_interface=LoopbackInterface([("con1", 3, "con1", 1), ("con1", 4, "con1", 2)]))
-
-# job = qmm.simulate(config, tof_cal, simulation_config)
 qm = qmm.open_qm(config)
 job = qm.execute(tof_cal)
 res_handles = job.result_handles
@@ -67,16 +36,16 @@ res_handles.wait_for_all_values()
 adc1 = res_handles.get("adc1").fetch_all()
 adc2 = res_handles.get("adc2").fetch_all()
 
-# # plt.figure()
-# # plt.title('time-of-flight calibration sequence')
-# # job.get_simulated_samples().con1.plot()
-# # plt.xlabel("time [ns]")
-# # plt.ylabel("DAC [V]")
-
 plt.figure()
 plt.title('time-of-flight calibration analysis')
 plt.plot(adc1)
 plt.plot(adc2)
 plt.legend(["adc1", "adc2"])
-print(np.mean(adc1)/4096)
-print(np.mean(adc2)/4096)
+offset1 = np.mean(adc1)/4096
+offset2 = np.mean(adc2)/4096
+print(f'Input 1 Offset: {offset1*1e3} mV')
+print(f'Input 2 Offset: {offset2*1e3} mV')
+pars_dict['analog_input_offsets'][0] = pars_dict['analog_input_offsets'][0] - offset1
+pars_dict['analog_input_offsets'][1] = pars_dict['analog_input_offsets'][1] - offset2
+with open("pars.json", "w") as outfile:
+    json.dump(pars_dict, outfile)

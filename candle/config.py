@@ -5,7 +5,7 @@ from datetime import date
 from qm.qua import *
 import json
 today = date.today()
-from utilities import *
+from meas_utilities import *
 datestr = today.strftime("%Y%m%d")
 
 # Opening JSON file containing values of experimental parameters such as optimal DC offsets
@@ -15,11 +15,13 @@ with open('pars.json', 'r') as openfile:
 qbFreq = pars['qb_freq']
 rrFreq = pars['rr_freq']
 qb_LO = pars['qb_LO']
-rr_LO = pars['rr_LO']
 phi = pars['IQ_rotation']
 rr_pulse_len_in_clk = pars['rr_pulse_len_in_clk']
-qb_IF = qbFreq - qb_LO
-rr_IF = rrFreq - rr_LO
+qb_IF = 50e6
+# qb_IF = qbFreq - qb_LO
+# rr_IF = rrFreq - rr_LO
+rr_IF = 50e6
+rr_LO = pars['rr_LO']
 qb_offset_I = {"offset": pars['qubit_mixer_offsets'][0]}
 qb_offset_Q = {"offset": pars['qubit_mixer_offsets'][1]}
 rr_offset_I = {"offset": pars['rr_mixer_offsets'][0]}

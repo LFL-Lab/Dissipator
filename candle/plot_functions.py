@@ -17,13 +17,13 @@ import scipy.fftpack
 import time
 import os
 from json import loads
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
-from matplotlib.colors import LightSource
+# from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+# from matplotlib.colors import LightSource
 from types import SimpleNamespace
 pi=np.pi
 import seaborn as sns; sns.set() # styling
 from matplotlib.ticker import FormatStrFormatter
-from scipy.signal import butter,lfilter,freqz
+from scipy.signal import butter,lfilter,freqz,find_peaks,peak_widths
 # import imageio
 
 # set some deafault
@@ -43,97 +43,183 @@ plt.rcParams["xtick.top"] = True
 plt.rcParams["xtick.bottom"] = True
 plt.rcParams["ytick.left"] = True
 plt.rcParams["ytick.right"] = True
-plt.rcParams['ytick.labelsize'] = 12
+plt.rcParams['ytick.labelsize'] = 14
 plt.rcParams["ytick.major.right"] = True
 plt.rcParams["ytick.labelright"] = False
 plt.rcParams["ytick.minor.visible"] = False
 
 #%% spec_plot
-def spec_plot(freq,I,Q,readout_power=-30,qubit_drive_amp=0.2):
+def spec_plot(freq,I,Q,attenuation=-30,df=0.1e6,plot='mag',element='resonator',fwhm=0,fc=0,iteration=1,find_peaks=False):
 
-    freq = freq*1e9
+    freq = freq*1e-9
     I = I*1e3
     Q = Q*1e3
-    mag = np.abs(I*I.conjugate()+Q*Q.conjugate())
+    mag = np.abs(I+1j*Q)
 
     phase = np.unwrap(np.angle(I+1j*Q))
-    # sigma = np.std(I)
-    # peak = scy.signal.find_peaks(I,height=np.mean(I)+sigma,distance=100)
-    # # print(peak[0])
-    # peaks = peak[0]
+    if element == 'qubit' and find_peaks:
+        sigma = np.std(mag)
+        peaks,_ = scy.signal.find_peaks(mag,height=np.mean(mag)+5*sigma,distance=200,width=10)
+        print(peaks)
+        try:
+            print(f'Peaks at: {round(freq[peaks[0]],5)} GHz, {round(freq[peaks[1]],5)}')
+        except:
+            print('Peaks not found or do not exist.')
 
-    fig = plt.figure(figsize=(10,7))
+    fig = plt.figure(figsize=(8,8))
 
-    # I data
-    ax1 = fig.add_subplot(221)
-    ax1.plot(freq,I,'-o', markersize = 3, c='C0')
-    ax1.set_xlabel('Frequency (GHz)')
-    ax1.set_ylabel('I (mV)')
-    # Q data
-    ax1 = fig.add_subplot(222)
-    ax1.plot(freq,Q,'-o', markersize = 3, c='C0')
-    ax1.set_xlabel('Frequency (GHz)')
-    ax1.set_ylabel('Q (mV)')
-    # phase data
-    ax1 = fig.add_subplot(223)
-    ax1.plot(freq,phase,'-o', markersize = 3, c='C0')
-    ax1.set_xlabel('Frequency (GHz)')
-    ax1.set_ylabel('Phase (rad)')
-    # Power data
-    ax1 = fig.add_subplot(224)
-    ax1.plot(freq,mag,'-o', markersize = 3, c='C0')
-    ax1.set_xlabel('Frequency (GHz)')
-    ax1.set_ylabel('Mag (mV)')
+    if element == 'qubit':
+
+        # I data
+        ax1 = fig.add_subplot(221)
+        ax1.plot(freq,I,'-o', markersize = 3, c='C0')
+        ax1.set_xlabel('Frequency (GHz)')
+        ax1.set_ylabel('I (mV)')
+        # Q data
+        ax1 = fig.add_subplot(222)
+        ax1.plot(freq,Q,'-o', markersize = 3, c='C0')
+        ax1.set_xlabel('Frequency (GHz)')
+        ax1.set_ylabel('Q (mV)')
+        # phase data
+        ax1 = fig.add_subplot(223)
+        ax1.plot(freq,phase,'-o', markersize = 3, c='C0')
+        ax1.set_xlabel('Frequency (GHz)')
+        ax1.set_ylabel('Phase (rad)')
+        # Power data
+        ax1 = fig.add_subplot(224)
+        ax1.plot(freq,mag,'-o', markersize = 3, c='C0')
+        ax1.set_xlabel('Frequency (GHz)')
+        ax1.set_ylabel('Magnitude (mV)')
+
+    elif element == 'resonator':
+        # Power data
+        ax1 = fig.add_subplot(211)
+        ax1.plot(freq,mag,'-o', markersize = 3, c='C0')
+        ax1.set_xlabel('Frequency (GHz)')
+        ax1.set_ylabel('Magnitude (mV)')
+        ax2 = fig.add_subplot(212)
+        ax2.plot(freq,phase,'-o', markersize = 3, c='C0')
+        ax2.set_xlabel('Frequency (GHz)')
+        ax2.set_ylabel('Phase (deg)')
+
+    if element == 'resonator':
+        txt = f'$\omega_c$ = {fc*1e-9:.5f} GHz\nFWHM = {fwhm*1e-6:.3f} MHz\n$\kappa$ = {2*np.pi*fwhm*1e-6:.3f} MHz\nReadout attenuation: {attenuation} dB\ndf = {df*1e-3} kHz'
+    elif element == 'qubit':
+        if len(peaks) == 2:
+            txt = f'$\omega_{10}$ = {round(freq[peaks[1]],3)} GHz\n$\omega_{12}$ = {round(freq[peaks[0]],3)} GHz\n$\\alpha$ = {round((freq[peaks[0]]-freq[peaks[1]])*1e3,1)} MHz'
+        else:
+            txt = ''
+    plt.gcf().text(1, 0.15, txt, fontsize=14)
+    plt.title(f'{element} spectroscopy {iteration}')
+    plt.tight_layout()
 
 #%% init_IQ_plot
 def init_IQ_plot():
     '''initialize axes for continuous plotting on the IQ plane'''
     plot = sns.jointplot()
-    plot.set_axis_labels('I (mV)', 'Q (mV)')
-    plot.ax_marg_x.grid('on')
-    plot.ax_marg_y.grid('on')
+    plot.set_axis_labels('I [mV]', 'Q [mV]')
+    plot.ax_marg_x.grid('off')
+    plot.ax_marg_y.grid('off')
     plot.fig.tight_layout()
     ax = plt.gca()
     return plot, ax
 
+#%% heatmap_plot
+def heatplot(xdata, ydata, data, xlabel = "", ylabel = "", normalize=False, cbar_label = 'log mag', **kwargs):
+    fig,ax = plt.subplots(figsize=(4,3), dpi=300)
+    if normalize:
+        cbar_label += ' (normalized)'
+
+    df = pd.DataFrame(data, columns = xdata, index = ydata)
+
+    if normalize:
+        df = df.apply(lambda x: (x-x.mean())/x.std(), axis = 1)
+
+    cbar_options = {
+        'label':    cbar_label,
+        'ticks':    np.around(np.linspace(np.amin(data),np.amax(data),5),0),
+        'pad':      0.1,
+        'values':   np.linspace(np.amin(data),np.amax(data),1000),
+        'shrink':   1.2,
+        'location': 'right',
+    }
+
+    heatmap_opts = {
+        'ax':    ax,
+        'linewidths':  0,
+        # 'xticklabels': np.linspace(min(xdata),max(xdata)+0.5,5),
+        # 'yticklabels': np.linspace(min(ydata),max(ydata)+0.5,5),
+        'vmin':        np.amin(data),
+        'vmax':        np.amax(data)
+    }
+
+    hm = sns.heatmap(df, ax=ax,cmap = 'viridis', cbar_kws=cbar_options, **kwargs)
+    hm.set_xlabel(xlabel, fontsize=12)
+    hm.set_ylabel(ylabel, fontsize=12)
+    hm.spines[:].set_visible(True)
+    ax.tick_params(direction='out',length=0.01,width=0.5,bottom=True, top=True, left=True, right=True,labeltop=False, labelbottom=True,labelrotation=90,labelsize=8,size=8)
+    plt.yticks(rotation=0)
+    plt.tight_layout()
+
+    return hm;
+
 #%% plot_single_shot
 def plot_single_shot(datadict,axes=0):
-    I = datadict['I'].tolist()
-    Q = datadict['Q'].tolist()
-    Iexc = datadict['Iexc'].tolist()
-    Qexc = datadict['Qexc'].tolist()
+
+    datadict = {key: value*1e3 for key,value in datadict.items()} # convert to mV
+    datadict = {key: value.tolist() for key,value in datadict.items()} # convert to list
 
     states = []
-    [states.append('$\rangle{g}$') for i in range(len(I))]
-    [states.append('$\rangle{e}$') for i in range(len(Iexc))]
+    for key,value in datadict.items():
+        print(key+':'+str(len(value))+'\n')
+    [states.append(r'$|g\rangle$') for i in range(len(datadict['I']))]
+    [states.append(r'$|e\rangle$') for i in range(len(datadict['Iexc']))]
     data = {
-            'I (mV)':   np.hstack((I*1e3,Iexc*1e3)),
-            'Q (mV)':   np.hstack((Q*1e3,Qexc*1e3)),
-            'states':   states
+            'I [mV]':   np.hstack((datadict['I'],datadict['Iexc'])),
+            'Q [mV]':   np.hstack((datadict['Q'],datadict['Qexc'])),
+            'States':   states
                 }
     dataF = pd.DataFrame(data=data)
-    plot = sns.jointplot(data=dataF, x='I (mV)',y='Q (mV)',hue='states',ax=axes)
+    plot = sns.jointplot(data=dataF, x='I [mV]',y='Q [mV]',hue='States',ax=axes,space=0)
 
 #%% plot_mixer_opt
-def plot_mixer_opt(par1,par2,power_data,cal='lo'):
-    if cal == 'lo':
-        par1 = np.around(par1*1e3,2)
-        par2 = np.around(par2*1e3,2)
-    elif cal == 'sb':
-        par1 = np.around(par1,4)
-        par2 = np.around(par2,4)
+def plot_mixer_opt(par1,par2,power_data,cal='LO',element='qubit',fc=5e9):
+
+    par1 = np.around(par1*1e3,1)
+    par2 = np.around(par2*1e3,1)
+
     par1 = par1.tolist()
     par2 = par2.tolist()
     df = pd.DataFrame(data=power_data,index=par1,columns=par2)
 
     hm = sns.heatmap(df,cbar_kws={'label': "Power [dBm]"})
-    if cal == 'lo':
+
+    if cal == 'LO':
         hm.set_xlabel('I [mV]')
         hm.set_ylabel('Q [mV]')
-    elif cal == 'sb':
-        hm.set_xlabel('Gain Imbalance')
-        hm.set_ylabel('Phase Imbalance')
+    elif cal == 'SB':
+        hm.set_ylabel('Gain Imbalance[x 1e-3]')
+        hm.set_xlabel('Phase Imbalance[x 1e-3]')
 
+    hm.spines[:].set_visible(True)
+    hm.tick_params(direction='out',length=0.01,width=0.5,bottom=True, top=False, left=True, right=True,labeltop=False, labelbottom=True,labelrotation=90,labelsize=10,size=10)
+    plt.yticks(rotation=0)
+    plt.tight_layout()
+    if element == 'qubit':
+        plt.title(f'Qubit Mixer {cal} Calibration at {round(fc*1e-9,4)} GHz')
+    elif element == 'rr':
+        plt.title(f'Readout Mixer {cal} Calibration at {round(fc*1e-9,4)} GHz')
+
+
+#%% fit_res
+def fit_res(f_data,z_data,res_type='notch'):
+    fc = f_data[np.argmin(z_data)]
+    if res_type == 'notch':
+        z_data = -z_data-min(-z_data)
+        idx = np.argwhere(np.diff(np.sign(z_data - 0.5*max(z_data)))).flatten()
+        fwhm = f_data[idx[1]] - f_data[idx[0]]
+
+    return fc,fwhm
 
 #%% fit_data
 def fit_data(x_vector,y_vector,sequence='rabi',dt=0.01,fitFunc='',verbose=0):
