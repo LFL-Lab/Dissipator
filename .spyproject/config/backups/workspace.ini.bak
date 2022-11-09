@@ -4,7 +4,7 @@ save_data_on_exit = True
 save_history = True
 save_non_project_files = False
 project_type = 'empty-project-type'
-recent_files = ['candle\\config.py', 'candle\\measurement_functions.py', 'candle\\instrument_init.py', 'candle\\mixer_calibration_script.py', 'candle\\mixer_calib_funcs.py', 'candle\\plot_functions.py', 'candle\\create_par_dict.py', 'candle\\Resonator.py', 'candle\\res_utilities.py']
+recent_files = ['candle\\config.py', 'candle\\measurement_functions.py', 'candle\\plot_functions.py', 'candle\\create_par_dict.py', 'candle\\instrument_init.py', 'candle\\mixer_calibration.py', 'candle\\master_script.py', 'candle\\meas_utilities.py']
 
 [main]
 version = 0.2.0

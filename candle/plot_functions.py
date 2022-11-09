@@ -195,8 +195,8 @@ def plot_mixer_opt(par1,par2,power_data,cal='LO',element='qubit',fc=5e9):
     hm = sns.heatmap(df,cbar_kws={'label': "Power [dBm]"})
 
     if cal == 'LO':
-        hm.set_xlabel('I [mV]')
-        hm.set_ylabel('Q [mV]')
+        hm.set_ylabel('I [mV]')
+        hm.set_xlabel('Q [mV]')
     elif cal == 'SB':
         hm.set_ylabel('Gain Imbalance[x 1e-3]')
         hm.set_xlabel('Phase Imbalance[x 1e-3]')

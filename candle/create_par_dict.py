@@ -16,12 +16,12 @@ from numpy import pi
 try:
     print('Opening parameter JSON file')
     with open('pars.json', 'r') as openfile:
-        pars_dict = json.load(openfile)
+        pars = json.load(openfile)
 except FileNotFoundError:
         print('JSON file not found; Creating new file using template')
-        pars_dict = {
+        pars = {
             "qb_LO":                        int(3.0e9),
-            "qb_freq":                      int(3.32402e9),
+            "qb_freq":                      int(4e9),
             "qubit_mixer_offsets":          [-0.015517,-0.005172], # I,Q
             "qubit_mixer_imbalance":        [0.077586,-0.108620], # gain,phase
             "pi_half_len":                  260, # needs to be multiple of 4
@@ -29,8 +29,8 @@ except FileNotFoundError:
             "amp_q":                        0.45,
             "gauss_len":                    48,
             "gauss_amp":                    0.45,
-            "rr_LO":                        int(6.30575e9),
-            "rr_freq":                      int(6.35575e9),
+            "rr_LO":                        int(6.55e9),
+            "rr_freq":                      int(6.65775e9),
             "rr_mixer_offsets":             [-0.0086,-0.00517],
             "rr_mixer_imbalance":           [0.015517,0.025862],
             "amp_r":                        0.45,
@@ -41,4 +41,4 @@ except FileNotFoundError:
 
         # write dictionary in JSON format without actually creating the file
         with open("pars.json", "w") as outfile:
-            json.dump(pars_dict, outfile)
+            json.dump(pars, outfile)

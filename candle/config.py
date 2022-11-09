@@ -7,33 +7,37 @@ import json
 today = date.today()
 from meas_utilities import *
 datestr = today.strftime("%Y%m%d")
-
-# Opening JSON file containing values of experimental parameters such as optimal DC offsets
-with open('pars.json', 'r') as openfile:
-    pars = json.load(openfile)
-
-qbFreq = pars['qb_freq']
-rrFreq = pars['rr_freq']
-qb_LO = pars['qb_LO']
-phi = pars['IQ_rotation']
-rr_pulse_len_in_clk = pars['rr_pulse_len_in_clk']
-qb_IF = 50e6
-# qb_IF = qbFreq - qb_LO
-# rr_IF = rrFreq - rr_LO
-rr_IF = 50e6
-rr_LO = pars['rr_LO']
-qb_offset_I = {"offset": pars['qubit_mixer_offsets'][0]}
-qb_offset_Q = {"offset": pars['qubit_mixer_offsets'][1]}
-rr_offset_I = {"offset": pars['rr_mixer_offsets'][0]}
-rr_offset_Q = {"offset": pars['rr_mixer_offsets'][1]}
-
-gauss_wf_4ns = delayed_gauss(pars['gauss_amp'], 4, 2)
+from instrument_init import set_qb_LO,set_rr_LO
 
 #####
 # configuration dict for QUA interpretor
 #####
+def config():
+    with open('pars.json', 'r') as openfile:
+        pars = json.load(openfile)
+    qbFreq = pars['qb_freq']
+    rrFreq = pars['rr_freq']
+    phi = pars['IQ_rotation']
+    rr_pulse_len_in_clk = pars['rr_pulse_len_in_clk']
+    qb_IF = 50e6
+    rr_IF = 50e6
+    # qb_LO = qbFreq - qb_IF
+    qb_LO = pars['qb_LO']
+    set_qb_LO(qb_LO)
+    rr_LO = rrFreq - rr_IF
+    set_rr_LO(rr_LO)
+    pars['qb_LO'] = qb_LO
+    pars['rr_LO'] = rr_LO
+    with open("pars.json", "w") as outfile:
+        json.dump(pars, outfile)
 
-config = {
+    qb_offset_I = {"offset": pars['qubit_mixer_offsets'][0]}
+    qb_offset_Q = {"offset": pars['qubit_mixer_offsets'][1]}
+    rr_offset_I = {"offset": pars['rr_mixer_offsets'][0]}
+    rr_offset_Q = {"offset": pars['rr_mixer_offsets'][1]}
+
+    gauss_wf_4ns = delayed_gauss(pars['gauss_amp'], 4, 2)
+    return {
 
     "version": 1,
 
@@ -246,10 +250,9 @@ config = {
     },
 
     "mixers": {
-        "qubit": [{"intermediate_frequency": qb_IF, "lo_frequency": pars['qb_LO'], "correction": IQ_imbalance(*pars['qubit_mixer_imbalance'])}],
-        "rr": [{"intermediate_frequency": rr_IF, "lo_frequency": pars['rr_LO'], "correction": IQ_imbalance(*pars['rr_mixer_imbalance'])}],
+        "qubit": [{"intermediate_frequency": qb_IF, "lo_frequency": qb_LO, "correction": IQ_imbalance(*pars['qubit_mixer_imbalance'])}],
+        "rr": [{"intermediate_frequency": rr_IF, "lo_frequency": rr_LO, "correction": IQ_imbalance(*pars['rr_mixer_imbalance'])}],
     }
 }
-
 # qmm = QuantumMachinesManager()
 # qm = qmm.open_qm(config)

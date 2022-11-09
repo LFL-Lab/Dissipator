@@ -11,7 +11,7 @@ from qm import LoopbackInterface
 from qm.QuantumMachinesManager import QuantumMachinesManager
 from slacker import sendslack
 # from Utilities.data import *
-from config import *
+from config import config
 import plot_functions as pf
 import os
 from datetime import datetime
@@ -22,18 +22,17 @@ import time
 import instrument_init as inst
 # from Resonator import Resonator as res
 import numpy as np
+import json
 
-electrical_delay = config['elements']['rr']['time_of_flight']
 #%% play_pulses
 def play_pulses():
-
     with program() as play_pulses:
         with infinite_loop_():
             play("const", 'qubit',duration=100)
             play("readout", "rr", duration=100)
 
     qmm = QuantumMachinesManager()
-    qm = qmm.open_qm(config)
+    qm = qmm.open_qm(config())
     job = qm.execute(play_pulses)
 
     return qm
@@ -153,7 +152,7 @@ def run_scan(df = 0.1e6,
     Q = []
 
     if lo_min != lo_max:
-        numchunks = int((lo_max-lo_min)/chunksize)
+        numchunks = int((lo_max-lo_min)/chunksize) + 1
         lo_list = [i*chunksize+lo_min for i in range(numchunks)]
     else:
         numchunks = 1
@@ -176,7 +175,7 @@ def run_scan(df = 0.1e6,
             }
 
     # save data
-    with open(f"D:\weak_measurements\spectroscopy\\resonator_spec\data_{iteration:03d}.csv","w") as datafile:
+    with open(f"D:\weak_measurements\spectroscopy\{element}_spec\data_{iteration:03d}.csv","w") as datafile:
         writer = csv.writer(datafile)
         writer.writerow(exp_dict.keys())
         writer.writerow(exp_dict.values())
@@ -232,10 +231,14 @@ def resonator_spec(IF_min = 0.1e6,
     # freqs_list = freqs.tolist()
     # set attenuation and change rr_LO freq
     inst.set_attenuator(attenuation=atten)
+    with open('pars.json', 'r') as openfile:
+        pars = json.load(openfile)
+
     pars['rr_LO'] = f_LO
     with open("pars.json", "w") as outfile:
         json.dump(pars, outfile)
     inst.set_rr_LO(f_LO)
+
     ### QUA code ###
     with program() as rr_spec:
 
@@ -265,7 +268,7 @@ def resonator_spec(IF_min = 0.1e6,
             Q_st.buffer(len(freqs)).average().save('Q')
             n_stream.save('n')
 
-    datadict,job = get_results(config, rr_spec,result_names=["I","Q","n"],showprogress=False)
+    datadict,job = get_results(rr_spec,result_names=["I","Q","n"],showprogress=False)
 
     I = datadict["I"]
     Q = datadict["Q"]
@@ -324,17 +327,19 @@ def qubit_spec(f_LO = 5e9,
         iteration = 1
 
     freqs = np.arange(IF_min, IF_max + df/2, df, dtype=int)
+    # freqs_list = freqs.tolist()
     saturation_dur = int(saturation_dur)
     inst.set_attenuator(attenuation=atten)
 
     with open('pars.json', 'r') as openfile:
-        pars_dict = json.load(openfile)
+        pars = json.load(openfile)
 
     pars['qb_LO'] = f_LO
     pars['rr_LO'] = pars['rr_freq'] - 50e6
 
     with open("pars.json", "w") as outfile:
         json.dump(pars, outfile)
+
     inst.set_qb_LO(f_LO)
     inst.set_rr_LO(pars['rr_LO'])
     ### QUA code ###
@@ -360,6 +365,7 @@ def qubit_spec(f_LO = 5e9,
 
             # loop over list of IF frequencies
             with for_(f, IF_min, f < IF_max + df/2, f + df):
+            # with for_each_(f, freqs_list):
                 # update IF frequency going into qubit mixer
                 update_frequency("qubit", f)
                 # measure background
@@ -392,7 +398,7 @@ def qubit_spec(f_LO = 5e9,
 
     # execute 'QubitSpecProg' using configuration settings in 'config'
     # fetch averaged I and Q values that were saved
-    datadict, job = get_results(config, QubitSpecProg, result_names = ["I", "Q", "N"], nPoints=n_avg,showprogress=showprogress, notify = notify)
+    datadict, job = get_results(QubitSpecProg, result_names = ["I", "Q", "N"], nPoints=n_avg,showprogress=showprogress, notify = notify)
     I = datadict["I"]
     Q = datadict["Q"]
     freq_arr = freqs+pars['qb_LO']
@@ -817,7 +823,7 @@ def make_progress_meter(n_handle, n_total):
 
 
 #%% get_results
-def get_results(config, jobtype, result_names = ["I", "Q", "N"],
+def get_results(jobtype, result_names = ["I", "Q", "N"],
                                 showprogress = False,
                                 nPoints = 1000,
                                 notify = False,
@@ -828,7 +834,7 @@ def get_results(config, jobtype, result_names = ["I", "Q", "N"],
     qmm = QuantumMachinesManager()
 
     # execute the job and get result handles
-    qm = qmm.open_qm(config)
+    qm = qmm.open_qm(config())
     job = qm.execute(jobtype)
     res_handles = job.result_handles
 
