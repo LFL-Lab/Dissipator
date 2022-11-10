@@ -48,6 +48,20 @@ plt.rcParams["ytick.major.right"] = True
 plt.rcParams["ytick.labelright"] = False
 plt.rcParams["ytick.minor.visible"] = False
 
+#%% power_plot
+def power_plot(freqs,signal,power,fc):
+    plt.plot(freqs*1e-6, signal,'-')
+    plt.xlabel('Frequency [MHz]')
+    plt.ylabel('Power [dBm]')
+    plt.show()
+    print(f'{power} dBm at {fc/1e9} GHz')
+#%% tof_plot
+def tof_plot(adc1,adc2):
+    plt.figure()
+    plt.title('time-of-flight calibration analysis')
+    plt.plot(adc1)
+    plt.plot(adc2)
+    plt.legend(["adc1", "adc2"])
 #%% spec_plot
 def spec_plot(freq,I,Q,attenuation=-30,df=0.1e6,plot='mag',element='resonator',fwhm=0,fc=0,iteration=1,find_peaks=False):
 

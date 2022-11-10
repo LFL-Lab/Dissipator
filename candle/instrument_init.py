@@ -17,9 +17,6 @@ client = Labber.connectToServer()
 # qmm = QuantumMachinesManager()
 # qm = qmm.open_qm(config)
 
-with open('pars.json', 'r') as openfile:
-    pars = json.load(openfile)
-
 def set_qb_LO(freq):
     print(f'Setting qubit LO to {round(freq*1e-9,5)} GHz')
     # initialize qubit LO
@@ -28,6 +25,12 @@ def set_qb_LO(freq):
     qLO.setValue('Frequency', freq)
     qLO.setValue('Output',True)
 
+def get_qb_LO():
+    # initialize qubit LO
+    qLO = client.connectToInstrument('BNC 845 Signal Generator', dict(name='qubit', startup = 'Get config'))
+    qLO.startInstrument()
+    return qLO.getValue('Frequency')
+
 def set_rr_LO(freq):
     print(f'Setting readout LO to {round(freq*1e-9,5)} GHz')
     # initialize readout LO
@@ -35,6 +38,12 @@ def set_rr_LO(freq):
     rrLO.startInstrument()
     rrLO.setValue('Frequency', freq)
     rrLO.setValue('Output',True)
+
+def get_rr_LO():
+    # initialize qubit LO
+    rrLO = client.connectToInstrument('BNC 845 Signal Generator', dict(name='readout', startup = 'Get config'))
+    rrLO.startInstrument()
+    return rrLO.getValue('Frequency')
 
 def set_attenuator(attenuation):
     # initialize digital attenuator

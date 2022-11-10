@@ -5,6 +5,7 @@
 
 from ctypes import *
 import numpy
+from sys import exit
 
 salib = CDLL("VISAdrivers/sa_device/sa_api.dll")
 

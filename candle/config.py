@@ -9,10 +9,13 @@ from meas_utilities import *
 datestr = today.strftime("%Y%m%d")
 from instrument_init import set_qb_LO,set_rr_LO
 
+# Opening JSON file containing values of experimental parameters such as optimal DC offsets
+
+from numpy import ga
 #####
 # configuration dict for QUA interpretor
 #####
-def config():
+def config(opt_mixer):
     with open('pars.json', 'r') as openfile:
         pars = json.load(openfile)
     qbFreq = pars['qb_freq']
