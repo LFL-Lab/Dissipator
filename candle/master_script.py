@@ -12,11 +12,12 @@ import instrument_init as inst
 ref_H = - 10
 ref_L = -45
 
-qb = qubit('qb4')
+qb = qubit('qb6')
 
-qb.update_value('qb_LO', value = 4.5e9)
-qb.update_value('rr_freq', value = 6.57045e9)
-qb.update_value('rr_LO', value = qb.pars['rr_freq']-50e6)
+qb.update_value('qubit_LO', value = 3e9)
+qb.update_value('rr_freq', value = 6.70625e9)
+qb.update_value('rr_IF', -30e6)
+qb.update_value('rr_LO', value = qb.pars['rr_freq'] - qb.pars['rr_IF'])
 
 qb.tof_cal()
 
@@ -40,9 +41,9 @@ qb.opt_mixer(sa, cal='SB', freq_span = 1e6, reference = ref_L, mode='fine',eleme
 
 rr_lo_leakage = qb.get_power(sa, freq=inst.get_rr_LO(),reference=ref_H,config=True,plot=True) # reference should be set ABOVE expected image power
 
-rr_im_leakage = qb.get_power(sa, freq=inst.get_rr_LO()-50e6,reference=ref_H,config=True,plot=True) # reference should be set ABOVE expected image power
+rr_im_leakage = qb.get_power(sa, freq=inst.get_rr_LO()-qb.pars['rr_IF'],reference=ref_H,config=True,plot=True) # reference should be set ABOVE expected image power
 
-rr_on_power = qb.get_power(sa, freq=inst.get_rr_LO()+50e6,reference=ref_H,config=True,plot=True) # reference should be set ABOVE expected image power
+rr_on_power = qb.get_power(sa, freq=inst.get_rr_LO()+qb.pars['rr_IF'],reference=ref_H,config=True,plot=True) # reference should be set ABOVE expected image power
 
 # do a coarse sweep to minimize LO leakage
 qb.opt_mixer(sa, cal='LO', freq_span = 1e6, mode='coarse',reference = ref_H, element='rr')
@@ -60,12 +61,13 @@ I,Q,freqs,job = qb.run_scan(df = 25e3, n_avg = 250, element='resonator', chunksi
 
 #%% qubit spectroscopy
 
-I,Q,freqs,job = qb.run_scan(df = 25e3, n_avg = 250, element='qubit', chunksize = 399e6, attenuation=35, lo_min = 4.3e9, lo_max = 4.9e9,
-            amp_q_scaling = 0.5, saturation_dur = 20e3, showprogress=False, res_ringdown_time = int(4e3))
-
-
+I,Q,freqs,job = qb.run_scan(df = 100e3, n_avg = 300, element='qubit', chunksize = 200e6, attenuation = 25, lo_min = 4.2e9, lo_max = 4.6e9,
+            amp_q_scaling = 0.75, saturation_dur = 20e3, showprogress=False, res_ringdown_time = int(4e3))
 
 #%% Rabi
+
+t_ar, I, Q, job, fitted_pars = qb.pulse_exp(exp='rabi',n_avg = 2000, t0 = 0,tf = 10e3, dt = 500, amp_q_scaling = 1, fit = True, plot = True,
+                                     detuning = 0e6, resettime = 400e3)
 
 #%% Ramsey
 

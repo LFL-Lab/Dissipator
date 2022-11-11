@@ -54,13 +54,14 @@ def power_plot(freqs,signal,power,fc):
     plt.xlabel('Frequency [MHz]')
     plt.ylabel('Power [dBm]')
     plt.show()
-    print(f'{power} dBm at {fc/1e9} GHz')
+
 #%% tof_plot
 def tof_plot(adc1,adc2):
     plt.figure()
     plt.title('time-of-flight calibration analysis')
     plt.plot(adc1)
     plt.plot(adc2)
+    plt.show()
     plt.legend(["adc1", "adc2"])
 #%% spec_plot
 def spec_plot(freq,I,Q,attenuation=-30,df=0.1e6,plot='mag',element='resonator',fwhm=0,fc=0,iteration=1,find_peaks=False):
@@ -73,7 +74,8 @@ def spec_plot(freq,I,Q,attenuation=-30,df=0.1e6,plot='mag',element='resonator',f
     phase = np.unwrap(np.angle(I+1j*Q))
     if element == 'qubit' and find_peaks:
         sigma = np.std(mag)
-        peaks,_ = scy.signal.find_peaks(mag,height=np.mean(mag)+5*sigma,distance=200,width=10)
+        print(f'Peak threshold at {np.mean(mag)+3*sigma}')
+        peaks,_ = scy.signal.find_peaks(mag,height=np.mean(mag)+3*sigma,distance=200,width=10)
         print(peaks)
         try:
             print(f'Peaks at: {round(freq[peaks[0]],5)} GHz, {round(freq[peaks[1]],5)}')
@@ -126,6 +128,7 @@ def spec_plot(freq,I,Q,attenuation=-30,df=0.1e6,plot='mag',element='resonator',f
     plt.gcf().text(1, 0.15, txt, fontsize=14)
     plt.title(f'{element} spectroscopy {iteration}')
     plt.tight_layout()
+    plt.show()
 
 #%% init_IQ_plot
 def init_IQ_plot():
@@ -140,7 +143,7 @@ def init_IQ_plot():
 
 #%% heatmap_plot
 def heatplot(xdata, ydata, data, xlabel = "", ylabel = "", normalize=False, cbar_label = 'log mag', **kwargs):
-    fig,ax = plt.subplots(figsize=(4,3), dpi=300)
+    fig,ax = plt.figure(figsize=(4,3), dpi=300)
     if normalize:
         cbar_label += ' (normalized)'
 
@@ -174,6 +177,7 @@ def heatplot(xdata, ydata, data, xlabel = "", ylabel = "", normalize=False, cbar
     ax.tick_params(direction='out',length=0.01,width=0.5,bottom=True, top=True, left=True, right=True,labeltop=False, labelbottom=True,labelrotation=90,labelsize=8,size=8)
     plt.yticks(rotation=0)
     plt.tight_layout()
+    plt.show()
 
     return hm;
 
@@ -198,7 +202,6 @@ def plot_single_shot(datadict,axes=0):
 
 #%% plot_mixer_opt
 def plot_mixer_opt(par1,par2,power_data,cal='LO',element='qubit',fc=5e9):
-
     par1 = np.around(par1*1e3,1)
     par2 = np.around(par2*1e3,1)
 
@@ -223,6 +226,7 @@ def plot_mixer_opt(par1,par2,power_data,cal='LO',element='qubit',fc=5e9):
         plt.title(f'Qubit Mixer {cal} Calibration at {round(fc*1e-9,4)} GHz')
     elif element == 'rr':
         plt.title(f'Readout Mixer {cal} Calibration at {round(fc*1e-9,4)} GHz')
+    plt.show()
 
 
 #%% fit_res
