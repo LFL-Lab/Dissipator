@@ -64,7 +64,7 @@ def tof_plot(adc1,adc2):
     plt.show()
     plt.legend(["adc1", "adc2"])
 #%% spec_plot
-def spec_plot(freq,I,Q,attenuation=-30,df=0.1e6,plot='mag',element='resonator',fwhm=0,fc=0,iteration=1,find_peaks=False):
+def spec_plot(freq,I,Q,attenuation=-30,df=0.1e6,plot='mag',element='resonator',fwhm=0,fc=0,qb_power=0,rr_power=0,rrFreq=0,iteration=1,find_peaks=False):
 
     freq = freq*1e-9
     I = I*1e3
@@ -74,11 +74,11 @@ def spec_plot(freq,I,Q,attenuation=-30,df=0.1e6,plot='mag',element='resonator',f
     phase = np.unwrap(np.angle(I+1j*Q))
     if element == 'qubit' and find_peaks:
         sigma = np.std(mag)
-        print(f'Peak threshold at {np.mean(mag)+3*sigma}')
-        peaks,_ = scy.signal.find_peaks(mag,height=np.mean(mag)+3*sigma,distance=200,width=10)
-        print(peaks)
+        print(f'Peak threshold at {np.mean(mag)+5*sigma}')
+        peaks,_ = scy.signal.find_peaks(mag,height=np.mean(mag)+5*sigma,distance=200,width=3)
         try:
-            print(f'Peaks at: {round(freq[peaks[0]],5)} GHz, {round(freq[peaks[1]],5)}')
+            for i in peaks:
+                print(f'Peaks at: {round(freq[i],5)} GHz\n')
         except:
             print('Peaks not found or do not exist.')
 
@@ -122,11 +122,13 @@ def spec_plot(freq,I,Q,attenuation=-30,df=0.1e6,plot='mag',element='resonator',f
         txt = f'$\omega_c$ = {fc*1e-9:.5f} GHz\nFWHM = {fwhm*1e-6:.3f} MHz\n$\kappa$ = {2*np.pi*fwhm*1e-6:.3f} MHz\nReadout attenuation: {attenuation} dB\ndf = {df*1e-3} kHz'
     elif element == 'qubit':
         if len(peaks) == 2:
-            txt = f'$\omega_{10}$ = {round(freq[peaks[1]],3)} GHz\n$\omega_{12}$ = {round(freq[peaks[0]],3)} GHz\n$\\alpha$ = {round((freq[peaks[0]]-freq[peaks[1]])*1e3,1)} MHz'
+            txt = '$\omega_{01}$ = %.4f GHz\n$\omega_{12}$ = %.4f GHz\n$\\alpha$ = %.1f MHz\n$P_{qb}$ = %.1f dBm\n$P_r$ = %.1f dBm\n$\omega_r$ = %.4f GHz'%(freq[peaks[1]],freq[peaks[0]],(freq[peaks[0]]-freq[peaks[1]])*1e3,qb_power,rr_power,rrFreq*1e-9)
+        elif len(peaks) == 1:
+            txt = '$\omega_{01}$ = %.4f GHz\n$P_{qb}$ = %.1f dBm\n$P_r$ = %.1f dBm\n$\omega_r$ = %.4f GHz'%(freq[peaks[0]], qb_power, rr_power, rrFreq*1e-9)
         else:
-            txt = ''
+            txt = '$P_{qb}$ = %.1f dBm\n$P_r$ = %.1f dBm\n$\omega_r$ = %.4f GHz'%(qb_power,rr_power,rrFreq*1e-9)
     plt.gcf().text(1, 0.15, txt, fontsize=14)
-    plt.title(f'{element} spectroscopy {iteration}')
+    # fig.set_title(f'{element} spectroscopy {iteration}')
     plt.tight_layout()
     plt.show()
 
@@ -182,14 +184,14 @@ def heatplot(xdata, ydata, data, xlabel = "", ylabel = "", normalize=False, cbar
     return hm;
 
 #%% plot_single_shot
-def plot_single_shot(datadict,axes=0):
+def plot_single_shot(datadict, axes=0):
 
     datadict = {key: value*1e3 for key,value in datadict.items()} # convert to mV
     datadict = {key: value.tolist() for key,value in datadict.items()} # convert to list
 
     states = []
-    for key,value in datadict.items():
-        print(key+':'+str(len(value))+'\n')
+    # for key,value in datadict.items():
+    #     print(key+':'+str(len(value))+'\n')
     [states.append(r'$|g\rangle$') for i in range(len(datadict['I']))]
     [states.append(r'$|e\rangle$') for i in range(len(datadict['Iexc']))]
     data = {
@@ -199,6 +201,7 @@ def plot_single_shot(datadict,axes=0):
                 }
     dataF = pd.DataFrame(data=data)
     plot = sns.jointplot(data=dataF, x='I [mV]',y='Q [mV]',hue='States',ax=axes,space=0)
+    plt.show()
 
 #%% plot_mixer_opt
 def plot_mixer_opt(par1,par2,power_data,cal='LO',element='qubit',fc=5e9):
@@ -256,12 +259,23 @@ def fit_data(x_vector,y_vector,sequence='rabi',dt=0.01,fitFunc='',verbose=0):
     amp = (max(y_vector)-min(y_vector))/2
     offset = np.mean(y_vector)
 
+
+
     if sequence == "rabi":
         fitFunction = rabi
         period = 1e3/(extract_freq(x_vector*1e3, y_vector, dt,plot=0))
         print('Period Initial Guess: %.1f ns'%(period))
         phase = pi
         x_vector = x_vector*1e3
+        lb = [0.1*amp,0.1*period,0,-2*abs(offset)]
+        ub = [10*amp,10*period,2*pi,2*abs(offset)]
+        p0 = [amp,period,phase,offset]
+
+    elif sequence == "p-rabi":
+        fitFunction = rabi
+        period = 1/(extract_freq(x_vector, y_vector, dt*1e-6,plot=0))
+        print('Amplitude Initial Guess: %.3f'%(period))
+        phase = pi
         lb = [0.1*amp,0.1*period,0,-2*abs(offset)]
         ub = [10*amp,10*period,2*pi,2*abs(offset)]
         p0 = [amp,period,phase,offset]
@@ -348,34 +362,32 @@ def fit_data(x_vector,y_vector,sequence='rabi',dt=0.01,fitFunc='',verbose=0):
 
 
 #%% plot_data
-def plot_data(x_vector,y_vector,sequence='rabi',qubitDriveFreq=3.8e9,amplitude_hd=1,
+def plot_data(x_vector,y_vector,sequence='rabi',qubitDriveFreq=3.8e9,qb_power=1,
                               pi2Width='',nAverages=1,
                               integration_length=2e-6,cav_resp_time=5e-6,stepSize=5e-6, iteration = 1,
                               Tmax=5e-6,measPeriod=5e-6,active_reset=False,
                               fitted_pars=np.zeros(7),plot_mode=0,rr_IF=5e6,fitFunc='',savefig=True):
 
-    x_vector = x_vector*1e3
+    # x_vector = x_vector*1e3
     y_vector = y_vector*1e3
 
-    if sequence == "a-rabi":
+    if sequence == "p-rabi":
         fig, ax = plt.subplots()
         ax.plot(x_vector, y_vector, '-o', markersize = 3, c='C0')
         ax.set_ylabel('Digitizer Voltage (mV)')
-        ax.set_xlabel('Pulse Amplitude (mV)')
-        # ax.plot(x_vector*1e3,rabi(x_vector*1e3, fitted_pars[0], fitted_pars[1], fitted_pars[2],fitted_pars[3]),'r')
+        ax.set_xlabel('Pulse Amplitude Scaling')
+        ax.plot(x_vector,rabi(x_vector, fitted_pars[0], fitted_pars[1], fitted_pars[2],fitted_pars[3]),'r')
         ax.set_title('Power Rabi Measurement %03d'%(iteration))
-        # textstr = '$\omega_d$ = %.4f GHz\n$A_d$ = %.2f V\n$T_{\pi/2}$ = %.1f ns\n$\hatn$ = %d'%(qubitDriveFreq*1e-9,amplitude_hd,round(fitted_pars[1]/4,1),nAverages)
-        # plt.gcf().text(0.95, 0.15, textstr, fontsize=14)
+        textstr = '$\omega_d$ = %.4f GHz\nn = %d'%(qubitDriveFreq*1e-9,nAverages)
 
-    if sequence == "t-rabi":
+    if sequence == "rabi":
         fig, ax = plt.subplots()
         ax.plot(x_vector*1e3, y_vector, '-o', markersize = 3, c='C0')
         ax.set_ylabel('Digitizer Voltage (mV)')
         ax.set_xlabel('Pulse Duration (ns)')
         ax.plot(x_vector*1e3,rabi(x_vector*1e3, fitted_pars[0], fitted_pars[1], fitted_pars[2],fitted_pars[3]),'r')
         ax.set_title('Rabi Measurement %03d'%(iteration))
-        textstr = '$\omega_d$ = %.4f GHz\n$A_d$ = %.2f V\n$T_{\pi/2}$ = %.1f ns\n$\hatn$ = %d'%(qubitDriveFreq*1e-9,amplitude_hd,round(fitted_pars[1]/4,1),nAverages)
-        plt.gcf().text(0.95, 0.15, textstr, fontsize=14)
+        textstr = '$\omega_d$ = %.4f GHz\n$P_{qb}$ = %.2f dBm\n$T_{\pi/2}$ = %.1f ns\n$n$ = %d'%(qubitDriveFreq*1e-9,qb_power,round(fitted_pars[1]/4,1),nAverages)
 
     elif sequence == "ramsey":
 
@@ -393,12 +405,8 @@ def plot_data(x_vector,y_vector,sequence='rabi',qubitDriveFreq=3.8e9,amplitude_h
         if fitFunc == 'envelope':
             ax1.plot(x_vector,decay(x_vector, fitted_pars[0], fitted_pars[1], fitted_pars[2]),'r',linewidth=linewidth)
         else:
-            # print(len(fitted_pars))
             ax1.plot(x_vector,ramsey(x_vector, fitted_pars[0], fitted_pars[1], fitted_pars[2],fitted_pars[3],fitted_pars[4]),'r',linewidth=linewidth)
-        # ax1.plot(x_vector,ramsey(x_vector, fitted_pars[0], fitted_pars[1], fitted_pars[2],fitted_pars[3],fitted_pars[4]),'r',linewidth=linewidth)
-        # textstr = '$T_{\pi/2}$=%.1f ns\n$\omega_d$ = %.6f GHz\n$A_d$ = %.3f V\n$\Delta$=%.3f MHz\n$T_2^*$=%.2f $\mu$s\n$\mu$ = %d mV\n$\omega_{AC}$ = %.4f GHz\n$\sigma$ = %.1f mV\n$B_0$ = %.1f mV\n$\\tau_k$ = %.3f $\mu s$\n$\hatn$ = %d'%(pi2Width*1e9,qubitDriveFreq*1e-9,amplitude_hd,fitted_pars[1],fitted_pars[3],mu*1e3,AC_freq*1e-9,sigma*1e3,B0*1e3,nu,nAverages)
-        # plt.gcf().text(0.95, 0.15, textstr, fontsize=fontSize)
-        # ax1.set_title('Ramsey Measurement %03d' %(iteration),size=fontSize)
+        textstr = '$T_{\pi/2}$=%.1f ns\n$\omega_d$ = %.4f GHz\n$\Delta$ = %.2f MHz\n$T_2$ = %.2f $\mu$s\n$n$ = %d'%(pi2Width,qubitDriveFreq*1e-9,fitted_pars[1],fitted_pars[3],nAverages)
 
     elif sequence == "echo":
 
@@ -408,9 +416,8 @@ def plot_data(x_vector,y_vector,sequence='rabi',qubitDriveFreq=3.8e9,amplitude_h
         ax.set_ylabel('Digitizer Voltage (mV)')
         ax.set_xlabel('Pulse Separation ($\mu$s)')
         ax.plot(x_vector,decay(x_vector, fitted_pars[0], fitted_pars[1], fitted_pars[2]),'r')
-        textstr = '$T_{\pi/2}$=%.1f ns\n$\omega_d$ = %.4f GHz\n$A_d$ = %.2f V\n$T_2$=%.2f$\mu$s\n$\hatn$ = %d'%(pi2Width*1e9,qubitDriveFreq*1e-9,amplitude_hd,fitted_pars[1],nAverages)
+        textstr = '$T_{\pi/2}$=%.1f ns\n$\omega_d$ = %.4f GHz\n$A_d$ = %.2f V\n$T_2$=%.2f$\mu$s\n$\hatn$ = %d'%(pi2Width*1e9,qubitDriveFreq*1e-9,qb_power,fitted_pars[1],nAverages)
         ax.set_title('Echo Measurement %03d' %(iteration))
-        plt.gcf().text(0.95, 0.15, textstr, fontsize=14)
 
 
     elif sequence == "T1":
@@ -420,14 +427,17 @@ def plot_data(x_vector,y_vector,sequence='rabi',qubitDriveFreq=3.8e9,amplitude_h
         ax.set_ylabel('Digitizer Voltage (mV)')
         ax.set_xlabel('Delay ($\mu$s)')
         ax.plot(x_vector,decay(x_vector, fitted_pars[0], fitted_pars[1], fitted_pars[2]),'r')
-        textstr = '$T_{\pi/2}$=%.1f ns\n$\omega_d$ = %.4f GHz\n$A_d$ = %.2f V\n$T_1$=%.2f $\mu$s\n$\mu$ = %.3f V\n\hatn$ = %d'%(pi2Width*1e9,qubitDriveFreq*1e-9,amplitude_hd,fitted_pars[1],nAverages)
+        textstr = '$T_{\pi/2}$=%.1f ns\n$\omega_d$ = %.4f GHz\n$T_1$ = %.1f $\mu$s\n$\hat{n}$ = %d'%(pi2Width,qubitDriveFreq*1e-9,fitted_pars[1],nAverages)
         ax.set_title('T1 Measurement %03d' %(iteration))
-        plt.gcf().text(0.95, 0.15, textstr, fontsize=14)
+
+    plt.gcf().text(0.95, 0.15, textstr, fontsize=14)
 
     plt.tick_params(axis='both',direction='in',bottom=True, top=True, left=True, right=True,size=8)
 
     if savefig:
         plt.savefig(f'D:\\weak_measurements\\{sequence}\\fig_{iteration:03d}.png',dpi='figure')
+
+    plt.show()
 
     return fig
 

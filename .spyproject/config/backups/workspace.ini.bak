@@ -4,7 +4,7 @@ save_data_on_exit = True
 save_history = True
 save_non_project_files = False
 project_type = 'empty-project-type'
-recent_files = ['candle\\config.py', 'candle\\measurement_functions.py', 'candle\\plot_functions.py', 'candle\\create_par_dict.py', 'candle\\instrument_init.py', 'candle\\mixer_calibration.py', 'candle\\master_script.py', 'candle\\meas_utilities.py']
+recent_files = ['candle\\master_script.py', 'candle\\qubit.py', 'candle\\plot_functions.py', 'candle\\instrument_init.py', '..\\lflPython_old\\DynamicalDecoupling\\configuration_NIST_Q2.py', 'candle\\Utilities.py', '..\\measurements_test\\MUNIN11\\meas_utilities.py', '..\\measurements_test\\MUNIN11\\rabi.py']
 
 [main]
 version = 0.2.0

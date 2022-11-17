@@ -69,11 +69,13 @@ def init_sa():
 # SC = client.connectToInstrument('Keithley 2400 SourceMeter',dict(interface='GPIB',address='24'))
 # SC.startInstrument()
 
+# try:
+#     sa
+# except NameError:
+#     sa = init_sa()
+
 if __name__ == '__main__':
     # initialize spectrum analyzer
-    set_qb_LO(freq=pars['qb_LO'])
-    set_rr_LO(freq=pars['rr_LO'])
-    set_attenuator(0)
     sa = init_sa()
 else:
     pass
