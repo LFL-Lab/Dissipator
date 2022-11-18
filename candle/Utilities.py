@@ -9,6 +9,7 @@ Created on Tue Nov 15 19:13:22 2022
 
 
 from tqdm import tqdm
+import numpy as np
 
 #%% make_progress_meter
 # display progress bar and send slack notification
@@ -36,3 +37,11 @@ def clk(num):
 #%% get_dt
 def get_dt(target_fs):
     return 1/(7 * target_fs * 1e-9)
+
+#&& round_from_uncertainty
+def round_from_uncertainty(num, unc, scale = 1):
+
+    # get number of significant digits
+    sigdit = int(np.log10(scale) - np.log10(unc))
+    scaled_num = round(num / scale, ndigits = sigdit)
+    return scaled_num * scale

@@ -61,8 +61,9 @@ def tof_plot(adc1,adc2):
     plt.title('time-of-flight calibration analysis')
     plt.plot(adc1)
     plt.plot(adc2)
-    plt.show()
     plt.legend(["adc1", "adc2"])
+    plt.show()
+
 #%% spec_plot
 def spec_plot(freq,I,Q,attenuation=-30,df=0.1e6,plot='mag',element='resonator',fwhm=0,fc=0,qb_power=0,rr_power=0,rrFreq=0,iteration=1,find_peaks=False):
 
@@ -321,13 +322,17 @@ def fit_data(x_vector,y_vector,sequence='rabi',dt=0.01,fitFunc='',verbose=0):
             tau = 20
             tau_ub = 300
         amp = y_vector[0] - y_vector[-1]
-        p0 = [amp,tau,offset]
-        if offset < 0:
-            lb = [0.95*amp,0.1,1.05*offset]
-            ub = [1.05*amp,tau_ub,0.95*offset]
-        elif offset >= 0:
-            lb = [0.95*amp,0.1,0.95*offset]
-            ub = [1.05*amp,tau_ub,1.05*offset]
+        p0 = [amp, tau, offset]
+        amp_bounds = [0.95 * amp, 1.05 * amp]
+        off_bounds = [0.95 * offset, 1.05 * offset]
+        lb = [min(amp_bounds), 0.1, min(off_bounds)]
+        ub = [max(amp_bounds), tau_ub, max(off_bounds)]
+        # if offset < 0:
+        #     lb = [0.95*amp,0.1,1.05*offset]
+        #     ub = [1.05*amp,tau_ub,0.95*offset]
+        # elif offset >= 0:
+        #     lb = [0.95*amp,0.1,0.95*offset]
+        #     ub = [1.05*amp,tau_ub,1.05*offset]
         fitFunction = decay
         # fitted_pars, covar = scy.optimize.curve_fit(decay, x_vector, y_vector,p0=p0,method='trf',bounds=[lb,ub],xtol=1e-12,maxfev=6000)
     elif sequence == "T1":
@@ -378,7 +383,7 @@ def plot_data(x_vector,y_vector,sequence='rabi',qubitDriveFreq=3.8e9,qb_power=1,
         ax.set_xlabel('Pulse Amplitude Scaling')
         ax.plot(x_vector,rabi(x_vector, fitted_pars[0], fitted_pars[1], fitted_pars[2],fitted_pars[3]),'r')
         ax.set_title('Power Rabi Measurement %03d'%(iteration))
-        textstr = '$\omega_d$ = %.4f GHz\nn = %d'%(qubitDriveFreq*1e-9,nAverages)
+        textstr = '$\omega_d$ = %.4f GHz\n$\hat{n}$ = %d'%(qubitDriveFreq*1e-9,nAverages)
 
     if sequence == "rabi":
         fig, ax = plt.subplots()
@@ -387,7 +392,7 @@ def plot_data(x_vector,y_vector,sequence='rabi',qubitDriveFreq=3.8e9,qb_power=1,
         ax.set_xlabel('Pulse Duration (ns)')
         ax.plot(x_vector*1e3,rabi(x_vector*1e3, fitted_pars[0], fitted_pars[1], fitted_pars[2],fitted_pars[3]),'r')
         ax.set_title('Rabi Measurement %03d'%(iteration))
-        textstr = '$\omega_d$ = %.4f GHz\n$P_{qb}$ = %.2f dBm\n$T_{\pi/2}$ = %.1f ns\n$n$ = %d'%(qubitDriveFreq*1e-9,qb_power,round(fitted_pars[1]/4,1),nAverages)
+        textstr = '$\omega_d$ = %.4f GHz\n$P_{qb}$ = %.2f dBm\n$T_{\pi/2}$ = %.1f ns\n$\hat{n}$ = %d'%(qubitDriveFreq*1e-9,qb_power,round(fitted_pars[1]/4,1),nAverages)
 
     elif sequence == "ramsey":
 
@@ -406,7 +411,8 @@ def plot_data(x_vector,y_vector,sequence='rabi',qubitDriveFreq=3.8e9,qb_power=1,
             ax1.plot(x_vector,decay(x_vector, fitted_pars[0], fitted_pars[1], fitted_pars[2]),'r',linewidth=linewidth)
         else:
             ax1.plot(x_vector,ramsey(x_vector, fitted_pars[0], fitted_pars[1], fitted_pars[2],fitted_pars[3],fitted_pars[4]),'r',linewidth=linewidth)
-        textstr = '$T_{\pi/2}$=%.1f ns\n$\omega_d$ = %.4f GHz\n$\Delta$ = %.2f MHz\n$T_2$ = %.2f $\mu$s\n$n$ = %d'%(pi2Width,qubitDriveFreq*1e-9,fitted_pars[1],fitted_pars[3],nAverages)
+        ax1.set_title('Ramsey %03d'%(iteration))
+        textstr = '$T_{\pi/2}$=%.1f ns\n$\omega_d$ = %.4f GHz\n$\Delta$ = %.2f MHz\n$T_2$ = %.2f $\mu$s\n$\hat{n}$ = %d'%(pi2Width,qubitDriveFreq*1e-9,fitted_pars[1],fitted_pars[3],nAverages)
 
     elif sequence == "echo":
 
@@ -416,7 +422,7 @@ def plot_data(x_vector,y_vector,sequence='rabi',qubitDriveFreq=3.8e9,qb_power=1,
         ax.set_ylabel('Digitizer Voltage (mV)')
         ax.set_xlabel('Pulse Separation ($\mu$s)')
         ax.plot(x_vector,decay(x_vector, fitted_pars[0], fitted_pars[1], fitted_pars[2]),'r')
-        textstr = '$T_{\pi/2}$=%.1f ns\n$\omega_d$ = %.4f GHz\n$A_d$ = %.2f V\n$T_2$=%.2f$\mu$s\n$\hatn$ = %d'%(pi2Width*1e9,qubitDriveFreq*1e-9,qb_power,fitted_pars[1],nAverages)
+        textstr = '$T_{\pi/2}$=%.1f ns\n$\omega_d$ = %.4f GHz\n$A_d$ = %.2f V\n$T_2$=%.2f$\mu$s\n$\hat{n}$ = %d'%(pi2Width,qubitDriveFreq*1e-9,qb_power,fitted_pars[1],nAverages)
         ax.set_title('Echo Measurement %03d' %(iteration))
 
 

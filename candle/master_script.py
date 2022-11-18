@@ -13,13 +13,13 @@ ref_H = - 10
 ref_L = -45
 
 '''Initialize qubit class'''
-qb = qubit('qb3')
+qb = qubit('qb5')
 
 '''Update important parameters'''
-qb.update_value('qubit_LO', value = 4.48e9)
+qb.update_value('qubit_LO', value = 4.2e9)
 qb.update_value('qubit_IF', value = 50e6)
-qb.update_value('rr_freq', value = 6.70625e9)
-qb.update_value('rr_IF', -30e6)
+qb.update_value('rr_freq', value = 6.65775e9)
+qb.update_value('rr_IF', 45e6)
 qb.update_value('rr_LO', value = qb.pars['rr_freq'] - qb.pars['rr_IF'])
 
 qb.tof_cal()
@@ -60,8 +60,8 @@ I,Q,freqs,job = qb.run_scan(df = 25e3, n_avg = 250, element='resonator', chunksi
 
 #%% qubit spectroscopy
 
-I,Q,freqs,job = qb.run_scan(df = 50e3, n_avg = 300, element='qubit', chunksize = 200e6, attenuation = 25, lo_min = 4.3e9, lo_max = 4.3e9,
-            amp_q_scaling = 0.05, saturation_dur = 20e3, showprogress=False, res_ringdown_time = int(4e3))
+I,Q,freqs,job = qb.run_scan(df = 50e3, n_avg = 300, element='qubit', chunksize = 250e6, attenuation = 30, lo_min = 3.4e9, lo_max = 3.4e9,
+            amp_q_scaling = 0.7, saturation_dur = 20e3, showprogress=False, res_ringdown_time = int(4e3))
 
 #%% Rabi
 atten = 20
@@ -79,7 +79,8 @@ qb.cal_pi_pulse(pi_half_len_target = 20, starting_amp = 0.44, n_avg = 200)
 t_arr, I, Q, job, fitted_pars = qb.pulse_exp(exp='ramsey', check_mixers = True, n_avg=200,dt=200,tmin=20,tmax=4e4,detuning=0e3)
 
 #%% Echo
+qb.pulse_exp(exp = 'echo', n_avg = 2000, tmin = 50, tmax = 120e3, dt = 1e3, fit=True, check_mixers=True)
 
 #%% T1
 
-t_arr, I, Q,job,fitted_pars = qb.pulse_exp(exp='T1',n_avg=200,atten=20,tmin=100,tmax=10e4,dt=1000,detuning=0)
+t_arr, I, Q,job,fitted_pars = qb.pulse_exp(exp='T1',n_avg=200,tmin=100,tmax=10e4,dt=1000,detuning=0)

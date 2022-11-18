@@ -29,53 +29,65 @@ logger.setLevel(level='WARNING')
 
 class qubit():
 #%% INITIALIZATION
-    def __init__(self,qb):
+
+    #%%% default_pars
+    default_pars = {
+                    "qubit_LO":                     int(4.48e9),
+                    "qubit_freq":                   int(4.5129e9),
+                    "qubit_IF":                     int(4.5129e9) - int(4.48e9),
+                    "qubit_mixer_offsets":          [0,0], # I,Q
+                    "qubit_mixer_imbalance":        [0,0], # gain,phase
+                    "pi_len":                       48, # needs to be multiple of 4
+                    "pi_half_len":                  48, # needs to be multiple of 4
+                    "pi_half_amp":                  0.2,
+                    "pi_amp":                       0.45,
+                    "amp_q":                        0.45,
+                    "gauss_len":                    48,
+                    "gauss_amp":                    0.45,
+                    "rr_LO":                        int(6.42e9),
+                    "rr_freq":                      int(6.4749e9),
+                    'rr_IF':                        int(6.4749e9) - int(6.42e9),
+                    "rr_mixer_offsets":             [0,0],
+                    "rr_mixer_imbalance":           [0,0],
+                    "amp_r":                        0.45,
+                    'rr_atten':                     25,
+                    "tof":                          260, # time of flight in ns
+                    "rr_pulse_len_in_clk":          500, # length of readout integration weights in clock cycles
+                    "IQ_rotation":                  -0/180*np.pi, # phase rotation applied to IQ data
+                    "analog_input_offsets":         [0,0],
+                    "qubit_resettime":              400e3,
+                    "rr_resettime":                 20e3
+                    }
+
+    #%%% __init__
+    def __init__(self, qb):
+        # load pars from json, OR create new json file
+        self.name = qb
         try:
+            print('Loading parameter JSON file')
             with open(f'{qb}_pars.json', 'r') as openfile:
                 self.pars = json.load(openfile)
-            print('Loading parameter JSON file')
+
+            # compare keys
+            default_keys = set(self.default_pars.keys())
+            keys = set(self.pars.keys())
+
+            # find all the keys in default_pars that are not in pars, and add them to pars w/ default value
+            for k in (default_keys - keys):
+                self.add_key(k, self.default_pars[k])
+
+            # find all the keys in pars that are not in default_pars, and remove them from pars
+            for k in (keys - default_keys):
+                self.remove_key(k)
+
+
         except FileNotFoundError:
             print('Parameter file not found; loading parameters from template')
-            self.pars = {
-                "name":                         qb,
-                "qubit_LO":                     int(4.48e9),
-                "qubit_freq":                   int(4.5129e9),
-                "qubit_IF":                     int(4.5129e9) - int(4.48e9),
-                "qubit_mixer_offsets":          [0,0], # I,Q
-                "qubit_mixer_imbalance":        [0,0], # gain,phase
-                "pi_half_len":                  40, # needs to be multiple of 4
-                "pi_amp":                       0.45,
-                "I0":                           1e-3, # I corresponding to state 0, calibrated by power rabi
-                "Q0":                           1e-3, # Q corresponding to state 0, calibrated by power rabi
-                "I1":                           1e-3, # I corresponding to state 0, calibrated by power rabi
-                "Q1":                           1e-3, # Q corresponding to state 0, calibrated by power rabi
-                "amp_q":                        0.45,
-                "gauss_len":                    48,
-                "gauss_amp":                    0.45,
-                "rr_LO":                        int(6.42e9),
-                "rr_freq":                      int(6.4749e9),
-                'rr_IF':                        int(6.4749e9) - int(6.42e9),
-                "rr_mixer_offsets":             [0,0],
-                "rr_mixer_imbalance":           [0,0],
-                "amp_r":                        0.45,
-                'rr_atten':                     25,
-                "tof":                          260, # time of flight in ns
-                "rr_pulse_len_in_clk":          500, # length of readout integration weights in clock cycles
-                "IQ_rotation":                  -0/180*np.pi, # phase rotation applied to IQ data
-                "analog_input_offsets":         [0,0],
-                "qubit_resettime":              400e3,
-                "rr_ringdown_time":             20e3
-                }
+            self.pars = self.default_pars
 
-            with open(f'{qb}_pars.json', "w") as outfile:
-                json.dump(self.pars, outfile)
 
-        # except Exception as e:
-        #     print(e)
-
-        # else:
-        #     print('There was a different error. Go and do something about it.')
-
+        self.write_pars()
+        self.init_instruments()
         self.make_config(self.pars)
 
 
@@ -173,14 +185,14 @@ class qubit():
                  df = 0.1e6,
                  n_avg = 500,
                  element='resonator',
+                 check_mixers=True,
                  chunksize = 200e6,
                  attenuation=20,
                  lo_min = 6e9,
                  lo_max = 7e9,
                  amp_q_scaling = 1,
                  saturation_dur = 20e3,
-                 showprogress=False,
-                 res_ringdown_time = int(4e3)):
+                 showprogress=False):
         """
         Scans a broad range of frequencies in search for qubits/resonators
 
@@ -219,9 +231,9 @@ class qubit():
 
         for f in lo_list:
             if element == 'resonator':
-                dataI,dataQ,freqs,job = self.resonator_spec(f_LO=f,atten=attenuation,IF_min=df,IF_max=chunksize,df=df,n_avg=n_avg,res_ringdown_time=res_ringdown_time,savedata=False)
+                dataI,dataQ,freqs,job = self.resonator_spec(f_LO=f,atten=attenuation,check_mixers=check_mixers,IF_min=df,IF_max=chunksize,df=df,n_avg=n_avg,res_ringdown_time=res_ringdown_time,savedata=False)
             elif element == 'qubit':
-                dataI,dataQ,freqs,job = self.qubit_spec(f_LO=f,amp_q_scaling=amp_q_scaling,saturation_dur=saturation_dur,atten=attenuation,IF_min=df,IF_max=chunksize,df=df,n_avg=n_avg,res_ringdown_time=res_ringdown_time,showprogress=showprogress,savedata=False)
+                dataI,dataQ,freqs,job = self.qubit_spec(f_LO=f,amp_q_scaling=amp_q_scaling,check_mixers=check_mixers,saturation_dur=saturation_dur,atten=attenuation,IF_min=df,IF_max=chunksize,df=df,n_avg=n_avg,showprogress=showprogress,savedata=False)
             freq_arr.extend(freqs)
             I.extend(dataI)
             Q.extend(dataQ)
@@ -230,7 +242,7 @@ class qubit():
                    'nAverages': n_avg,
                          'w_LO': self.pars['rr_LO'],
                          'attenuation': attenuation,
-                'wait_period':  res_ringdown_time,
+                'wait_period':  self.pars['rr_ringdown_time'],
                 }
 
         # save data
@@ -357,14 +369,14 @@ class qubit():
                    f_LO = 5e9,
                    IF_min = 0.1e6,          # min IF frequency
                    IF_max = 400e6,          # max IF frequency
+                   check_mixers=True,
                    df = 0.1e6,              # IF frequency step
                    rr_freq = 6e9,       #resonator frequency
                    amp_q_scaling = 0.1,     # prefactor to scale default "const" qubit tone, amp_q
                    n_avg = 500, # number of averages
                    atten = 10, # readout attenuation
-                   saturation_dur = int(20e3),   # time qubit saturated w/ qubit tone, in ns
-                   wait_period = int(40e3),      # wait time between experiments, in ns
-                   res_ringdown_time = int(4e3), # resonator ringdown time for onoff measurement
+                   saturation_dur = int(10e3),   # time qubit saturated w/ qubit tone, in ns
+                   resettime = int(40e3),      # wait time between experiments, in ns
                    on_off =  True,          # background subtraction
                    notify = False,
                    showprogress=False,
@@ -377,8 +389,7 @@ class qubit():
         except:
             iteration = 1
 
-        freqs = np.arange(IF_min, IF_max + df/2, df, dtype=int)
-        # freqs_list = freqs.tolist()
+        freq_arr = np.arange(IF_min, IF_max + df/2, df, dtype=int)
         saturation_dur = int(saturation_dur)
         inst.set_attenuator(attenuation=atten)
 
@@ -386,74 +397,19 @@ class qubit():
         self.update_value('qubit_LO',value = f_LO)
         self.update_value('rr_LO', value = self.pars['rr_freq'] - self.pars['rr_IF'])
 
-        self.check_mix_cal(sa,check=True,amp_q = amp_q_scaling, threshold = - 60)
-        # self.opt_mixer(sa,cal='SB',mode='coarse',element='qubit',reference=-30)
-        # self.opt_mixer(sa,cal='SB',mode='fine',element='qubit',reference=-50)
+        self.check_mix_cal(sa,check=check_mixers,amp_q = amp_q_scaling, threshold = - 60)
 
-        ### QUA code ###
-        # program() delimits the QUA code, which has its own syntax separate from python
-        # This code defines a QM job 'QubitSpecProg', which is later run in 'getIQ'
-        with program() as QubitSpecProg:
-
-            # first, we declare special QUA types
-            n = declare(int) # averaging iterable
-            f = declare(int) # frequency iterable
-            I = declare(fixed)
-            Q = declare(fixed)
-            I_stream = declare_stream()
-            Q_stream = declare_stream()
-            n_stream = declare_stream()
-            if on_off:
-                I_background = declare(fixed)
-                Q_background = declare(fixed)
-                I_tot = declare(fixed)
-                Q_tot = declare(fixed)
-            # loop over n_avg iterations
-            with for_(n, 0, n < n_avg, n + 1):
-
-                # loop over list of IF frequencies
-                with for_(f, IF_min, f < IF_max + df/2, f + df):
-                # with for_each_(f, freqs_list):
-                    # update IF frequency going into qubit mixer
-                    update_frequency("qubit", f)
-                    # measure background
-                    if on_off:
-                        measure("readout", "rr", None, *self.res_demod(I_background, Q_background))
-                        wait(res_ringdown_time, "rr")
-                        align("rr", "qubit") # wait for operations on resonator to finish before playing qubit pulse
-                    # play qubit pulse and measure
-                    play("const" * amp(amp_q_scaling), "qubit", duration = saturation_dur)
-                    align("qubit", "rr") # wait for operations on resonator to finish before playing qubit pulse
-                    measure("readout", "rr", None, *self.res_demod(I, Q))
-                    # subtract background and save to stream
-                    if on_off:
-                        assign(I_tot, I - I_background)
-                        assign(Q_tot, Q - Q_background)
-                        save(I_tot, I_stream)
-                        save(Q_tot, Q_stream)
-                    else:
-                        save(I, I_stream)
-                        save(Q, Q_stream)
-                    # wait some time before continuing to next IF frequency
-                    wait(wait_period, "rr")
-                save(n, n_stream)
-
-            # average data over iterations and save to stream
-            with stream_processing():
-                I_stream.buffer(len(freqs)).average().save('I')
-                Q_stream.buffer(len(freqs)).average().save('Q')
-                n_stream.save('N')
-
+        prog = self.make_sequence(exp='qubit-spec',on_off=on_off,saturation_dur=saturation_dur,var_arr=freq_arr,n_avg=n_avg,amp_q_scaling=amp_q_scaling,resettime_clk=clk(resettime))
         # execute 'QubitSpecProg' using configuration settings in 'config'
         # fetch averaged I and Q values that were saved
-        datadict, job = self.get_results(QubitSpecProg, result_names = ["I", "Q", "N"], n_total=n_avg,showprogress=showprogress, notify = notify)
+        datadict, job = self.get_results(jobtype = prog, result_names = ["I", "Q"], n_total=n_avg,showprogress=showprogress, notify = notify)
 
         qb_power = self.get_power(sa,freq=self.pars['qubit_LO']+self.pars['qubit_IF'],reference=0,amp_q = amp_q_scaling, span=1e6,config=True,output=False)
         rr_power = self.get_power(sa,freq=self.pars['rr_LO']+self.pars['rr_IF'],reference=0,span=1e6,config=True,output=False)
 
         I = np.array(datadict["I"])
         Q = np.array(datadict["Q"])
-        freq_arr = np.array(freqs + self.pars['qubit_LO'])
+        freq_arr = np.array(freq_arr + self.pars['qubit_LO'])
 
         pf.spec_plot(freq_arr,I,Q,iteration=iteration,element='qubit',qb_power=qb_power,rr_power=rr_power,rrFreq=self.pars['rr_freq'],find_peaks=True)
         # print(f'Qubit Frequency: {fc*1e-9:.5f} GHz\nFWHM = {fwhm*1e-6} MHz\nkappa = {2*np.pi*fwhm*1e-6:.3f} MHz')
@@ -482,7 +438,8 @@ class qubit():
                    a_min = 0.01,    # minimum amp_q scaling
                    a_max = 1,     # maximum amp_q scaling
                    da = 0.005,       # step of amp_q
-                   check_mix = True,
+                   check_mixers = True,
+                   pulse = 'pi',
                    n_avg = 2000,    # number of averages
                    fit = True,
                    plot = True,
@@ -492,13 +449,12 @@ class qubit():
 
         inst.set_attenuator(attenuation=self.pars['rr_atten'])
 
-        self.check_mix_cal(sa, check = check_mix, threshold = -55)
+        self.check_mix_cal(sa, check = check_mixers, threshold = -55)
 
-        prog = self.make_sequence(exp = 'p-rabi',
+        prog = self.make_sequence(exp = 'p-rabi', pulse = pulse,
                                   var_arr = amps,
                                   detuning = detuning,
-                                  n_avg = n_avg,
-                                  resettime_clk = clk(self.pars['qubit_resettime']))
+                                  n_avg = n_avg)
 
         datadict, job = self.get_results(jobtype = prog, result_names = ['I','Q'], showprogress = True, progress_key = 'n', n_total = n_avg)
 
@@ -509,7 +465,7 @@ class qubit():
             fitted_pars,error = pf.fit_data(amps,np.abs(I+1j*Q),sequence='p-rabi',dt=amps[-1]/len(amps),fitFunc='rabi')
             if plot:
                 pf.plot_data(x_vector=amps, y_vector=np.abs(I+1j*Q),sequence='p-rabi',fitted_pars=fitted_pars,
-                             qubitDriveFreq=self.pars['qubit_LO']+self.pars['qubit_IF'],savefig=False)
+                             qubitDriveFreq=self.pars['qubit_LO']+self.pars['qubit_IF'],savefig=False,nAverages=n_avg)
 
         '''Update pulse amplitude'''
         A = fitted_pars[1] #self.pars['pi_amp'] * fitted_pars[1]
@@ -521,14 +477,11 @@ class qubit():
     def single_shot(self,nIterations=100000,
                     n_reps = 1000,
                     liveplot = False,
-                    numSamples = 1000,
-                    resettime=400e3):
-
-        resettime_clk = round(resettime / 4)
+                    numSamples = 1000):
 
         inst.set_attenuator(attenuation=self.pars['rr_atten'])
 
-        prog = self.make_sequence(exp='ss', nIterations = nIterations, n_reps = n_reps,resettime_clk=resettime_clk)
+        prog = self.make_sequence(exp='ss', nIterations = nIterations, n_reps = n_reps)
 
         datadict, job = self.get_results(jobtype = prog,result_names=['i', 'I','Q','Iexc','Qexc'], showprogress=False, liveplot = liveplot)
 
@@ -539,9 +492,52 @@ class qubit():
         return datadict, job, prog
 
     #%%% make_sequence
-    def make_sequence(self,exp='rabi',var_arr=0,detuning=0,n_avg=0,amp_q_scaling=1,numPeriods=2,resettime_clk=int(1e4),nIterations=1,n_reps=100):
+    def make_sequence(self,exp='rabi',var_arr=0,detuning=0,n_avg=0,amp_q_scaling=1,numPeriods=2,nIterations=1,n_reps=100,on_off=True,saturation_dur=int(10e3),pulse='pi'):
 
-        # assert round(dt/4) > 4, "Minimum stepsize is 16 ns (4 clock cycles)"
+        resettime_clk= clk(self.pars['qubit_resettime'])
+
+        if exp == 'qubit-spec':
+            with program() as prog:
+                n, f, I, Q = self.declare_vars([int, int, fixed, fixed])
+
+                I_stream, Q_stream, n_stream = self.declare_streams(stream_num=3)
+
+                if on_off:
+                    I_b, Q_b, I_tot,Q_tot = self.declare_vars([fixed,fixed, fixed, fixed])
+
+                # loop over n_avg iterations
+                with for_(n, 0, n < n_avg, n + 1):
+                    save(n,n_stream)
+                    # loop over list of IF frequencies
+                    with for_(*from_array(f,var_arr)):
+                        # update IF frequency going into qubit mixer
+                        update_frequency("qubit", f)
+                        # measure background
+                        if on_off:
+                            measure("readout", "rr", None, *self.res_demod(I_b, Q_b))
+                            wait(clk(self.pars['rr_resettime']), "rr")
+                            align("rr", "qubit") # wait for operations on resonator to finish before playing qubit pulse
+                        # play qubit pulse and measure
+                        play("const" * amp(amp_q_scaling), "qubit", duration = clk(saturation_dur))
+                        align("qubit", "rr") # wait for operations on resonator to finish before playing qubit pulse
+                        measure("readout", "rr", None, *self.res_demod(I, Q))
+                        # subtract background and save to stream
+                        if on_off:
+                            assign(I_tot, I - I_b)
+                            assign(Q_tot, Q - Q_b)
+                            save(I_tot, I_stream)
+                            save(Q_tot, Q_stream)
+                        else:
+                            save(I, I_stream)
+                            save(Q, Q_stream)
+                        # wait some time before continuing to next IF frequency
+                        wait(resettime_clk, "rr")
+
+                # average data over iterations and save to stream
+                with stream_processing():
+                    I_stream.buffer(len(var_arr)).average().save('I')
+                    Q_stream.buffer(len(var_arr)).average().save('Q')
+                    n_stream.save('n')
 
         if exp == 'rabi':
             with program() as prog:
@@ -582,8 +578,7 @@ class qubit():
                 with for_(n, 0, n < n_avg, n + 1):
                     save(n, n_stream)
                     with for_(*from_array(a,var_arr)):  # Sweep pulse duration
-                        # play("pi_half" * amp(a), "qubit", duration = 4*numPeriods*self.pars['pi_half_len'])
-                        play("pi" * amp(a), "qubit")
+                        play(pulse * amp(a), "qubit")
                         align("qubit", "rr")
                         measure("readout", "rr", None, *self.res_demod(I, Q))
                         save(I, I_stream)
@@ -617,7 +612,6 @@ class qubit():
                         save(Q, Q_stream)
                         wait(resettime_clk, "qubit")
 
-
                with stream_processing():
                    I_stream.buffer(len(var_arr)).average().save("I")
                    Q_stream.buffer(len(var_arr)).average().save("Q")
@@ -636,9 +630,9 @@ class qubit():
                     save(n,n_stream)
                     with for_(*from_array(t,var_arr)):
                         play("pi_half", "qubit")
-                        wait(t/2, "qubit")
+                        wait(t, "qubit")
                         play("pi", "qubit")
-                        wait(t/2, "qubit")
+                        wait(t, "qubit")
                         play("pi_half", "qubit")
                         align("qubit","rr")
                         measure("readout", "rr", None, *self.res_demod(I, Q))
@@ -664,7 +658,6 @@ class qubit():
                 with for_(n, 0, n < n_avg, n + 1):
                     save(n, n_stream)
                     with for_(*from_array(t,var_arr)):
-                        # wait(resettime_clk, "qubit")
                         play("pi", "qubit")
                         wait(t, 'rr')
                         align("qubit", "rr")
@@ -726,14 +719,13 @@ class qubit():
                       exp='rabi',
                       check_mixers=True,
                       n_avg = 2000,
-                      tmin = 0,         # minimum pulse duration in nanoseconds
+                      tmin = 16,         # minimum pulse duration in nanoseconds
                       tmax = 10e3,    # maximum pulse duration in nanoseconds
                       dt = 500,        # step of sweep in nanoseconds
                       amp_q_scaling = 1,
                       fit = True,
                       plot = True,
-                      detuning = 0e6,
-                      resettime = 400e3):
+                      detuning = 0e6):
         """
 
         Args:
@@ -764,7 +756,6 @@ class qubit():
         tmin = clk(tmin)
         tmax = clk(tmax)
         dt = clk(dt)
-        resettime_clk = clk(resettime)
         t_arr = np.arange(tmin, tmax + dt/2, dt, dtype = int)
 
         inst.set_attenuator(attenuation=self.pars['rr_atten'])
@@ -775,14 +766,17 @@ class qubit():
         # self.update_value('qubit_IF', (self.pars['qubit_freq']-self.pars['qubit_LO']) + detuning)
         self.check_mix_cal(sa, amp_q = amp_q_scaling,check = check_mixers, threshold = -55)
 
-        prog = self.make_sequence(exp=exp,var_arr=t_arr,detuning=detuning,n_avg=n_avg,amp_q_scaling=amp_q_scaling,resettime_clk=clk(resettime))
+        prog = self.make_sequence(exp=exp,var_arr=t_arr,detuning=detuning,n_avg=n_avg,amp_q_scaling=amp_q_scaling)
 
         datadict, job = self.get_results(jobtype = prog, result_names = ["I", "Q"], n_total=n_avg, notify = False)
 
         qb_power = self.get_power(sa,freq=self.pars['qubit_LO']+self.pars['qubit_IF'],reference=0,amp_q = amp_q_scaling, span=1e6,config=True,output=False)
 
         # t_arr = np.array(datadict["t"])/1e3 # times in microseconds
-        t_arr = np.array(t_arr)*4/1e3
+        if exp == 'echo':
+            t_arr = np.array(t_arr)*4/1e3 * 2
+        else:
+            t_arr = np.array(t_arr)*4/1e3
         I = np.array(datadict["I"])
         Q = np.array(datadict["Q"])
         ydata = np.abs(I+1j*Q)
@@ -814,7 +808,7 @@ class qubit():
                          'A_d':     amp_q_scaling,
                          'w_d':  self.pars['qubit_LO']+self.pars['qubit_IF']-detuning,
                          'w_LO': self.pars['qubit_LO'],
-                'wait_period':  resettime,
+                'wait_period':  self.pars['qubit_resettime'],
                 }
 
         # save data
@@ -864,63 +858,82 @@ class qubit():
         self.update_value('analog_input_offsets', value = [self.pars['analog_input_offsets'][0] - offset1,self.pars['analog_input_offsets'][1] - offset2])
 
 #%%% cal_pi_pulse
-    def cal_pi_pulse(self, pi_half_len_target = 20, starting_amp = 0.44, **rabi_kwargs):
+    def cal_pulse(self, pulse = 'pi', pulse_len_target = 20, starting_amp = 0.44, **rabi_kwargs):
 
-        print("CALIBRATING pi pulse... target time = {pi_half_len_target}")
+        if pulse == 'pi':
+            scaling = 2
+        elif pulse == 'pi_half':
+            scaling = 4
+
+        print(f"CALIBRATING {pulse} pulse... target time = {pulse_len_target}")
 
         # start with a clean slate based on input parameters
-        self.update_value('pi_amp', starting_amp)
-        self.update_value('pi_half_len', pi_half_len_target)
+        self.update_value(f'{pulse}_amp', starting_amp)
+        self.update_value(f'{pulse}_len', pulse_len_target)
 
         # run power rabi and extract fit parameter A, which is the scaling factor
         print("Calibrating fit...")
-        amps, I, Q, job, A = self.power_rabi(check_mix = False, fit = True, plot = True, **rabi_kwargs)
-        print(f"Fitted scaling factor A/2 = {round(A/2, ndigits=4)}")
+        amps, I, Q, job, A = self.power_rabi(check_mixers = False, pulse = pulse, fit = True, plot = True, **rabi_kwargs)
+
+        print(f"Fitted scaling factor A/{scaling} = {round(A/scaling, ndigits=4)}")
 
         # check: if A / 2 < 1, then you've probably found your pi pulse and you're donee
         # if A / 2 >= 1, then you probably need to increrase your pi_half_len_target
         # this code will automatically recalibrate with a new pi_half_len_target based on the estimate of A
-        if A / 2 < 1:
+        if A / scaling < 1:
 
-            print("Pi pulse calibration successful, updating config...")
+            print(f"{pulse} pulse calibration successful, updating config...")
 
             # update pi_amp
-            self.update_value('pi_amp', starting_amp * A / 2)
+            self.update_value(f'{pulse}_amp', starting_amp * A / scaling)
 
             # as a check to your pi pulse, run single shot and run power rabi again to see your pi pulse in action
-            self.single_shot(nIterations=1)
-            amps, I, Q, job, A = self.power_rabi(check_mix = False, fit = True, plot = True, **rabi_kwargs)
+            if pulse == 'pi':
+                self.single_shot(nIterations=1)
+            amps, I, Q, job, A = self.power_rabi(check_mixers = False, pulse = pulse, fit = True, plot = True, **rabi_kwargs)
 
         else:
 
             # your new pi pulse time to try is the old time, scaled by A/2, times 1.1 to overshoot a bit
             # convert to clock cycles then multiply by 4 to ensure a pulse time w/ integer clock cycles
-            newtarget = 4 * clk(pi_half_len_target * (A/2) * 1.1)
+            newtarget = 4 * clk(pulse_len_target * (A/scaling) * 1.1)
 
-            print(f"The pi half length target time was too short. Trying again for target time {newtarget} ns.")
+            print(f"The {pulse} length target time was too short. Trying again for target time {newtarget} ns.")
 
-            cal_pi_pulse(pi_half_len_target = newtarget, starting_amp = starting_amp, **rabi_kwargs)
+            self.cal_pulse(pulse_len_target = newtarget, pulse = pulse, starting_amp = starting_amp, **rabi_kwargs)
 
 
     #%%% cal_freq
-    def cal_freq(self, min_delta=10e3, check_mixers = False, recalibrate_pi = True, **kwargs):
+    def cal_freq(self,  min_delta=10e3,
+                        check_mixers = False,
+                        recalibrate_pulses = True,
+                        dt_scaling = 4,
+                        **kwargs):
 
         print("RUNNING initial Ramsey experiment...")
         t_arr, I, Q, job, fitted_pars = self.pulse_exp(exp='ramsey', check_mixers = check_mixers,dt=40,tmin=20,tmax=2e4,detuning=0,**kwargs)
 
         delta = abs(fitted_pars[1]) * 1e6
-        # print(f'Delta = {delta}')
         tau = fitted_pars[3] * 1e3
         tmax = 2 * tau
-        # print(f"tau = {tau}")
 
         self.update_value('qubit_freq', self.pars['qubit_freq'] + delta)
 
-        while True:
+        n = 0
+
+        while n < 10:
+
+            n += 1
 
             print(f'RUNNING Ramsey experiment, delta = {round(delta/1e3, ndigits=6)} kHz')
 
-            dt = round(get_dt(target_fs=delta)/4)
+            if delta < 100e3:
+                scaling = dt_scaling * 8
+            else:
+                scaling = dt_scaling
+
+            dt = round(get_dt(target_fs=delta)/scaling)
+
             t_arr, I, Q, job, fitted_pars = self.pulse_exp(exp='ramsey', detuning = 0e6, check_mixers = check_mixers,dt=dt,tmin=20,tmax=tmax, **kwargs)
             delta_result = abs(fitted_pars[1]) * 1e6
 
@@ -928,41 +941,128 @@ class qubit():
 
             if delta_result < min_delta:
                 print(f'SUCCESS: delta_result < min_delta = {round(min_delta/1e3, ndigits=6)} kHz :) ')
+                rounded_freq = round_from_uncertainty(self.pars['qubit_freq'], 1e3, scale=1e9) # round frequency to nearest kHz
+                self.update_value('qubit_freq', rounded_freq)
+
+                if recalibrate_pulses:
+                    self.cal_pulse(pulse = 'pi', pulse_len_target = self.pars['pi_len'], **kwargs)
+                    self.cal_pulse(pulse = 'pi_half', pulse_len_target = self.pars['pi_half_len'], **kwargs)
+
                 break
             elif delta_result > delta:
                 print(f'WRONG DIRECTION: delta_result > delta')
                 self.update_value('qubit_freq', self.pars['qubit_freq'] - 2 * delta)
+                delta = delta_result
             else:
                 print(f'RIGHT DIRECTION: delta_result < delta')
                 self.update_value('qubit_freq', self.pars['qubit_freq'] + delta_result)
                 delta = delta_result
 
-        if recalibrate_pi:
-            self.cal_pi_pulse(pi_half_len_target = self.pars['pi_half_len'], **kwargs)
+
+
+        print(f"Didn't converge within min_freq = {minfreq}")
 
 
 
-        # print(f"RUNNING second Ramsey experiment with detuning {delta}...")
-        # dt = round(self.get_dt(target_fs=delta)/2)
-        # t_arr, I, Q, job, fitted_pars = self.pulse_exp(exp='ramsey', detuning = delta, check_mixers = check_mixers,dt=dt,tmin=20,tmax=tmax, **kwargs)
-        # delta2 = abs(fitted_pars[1]) * 1e6
+    #%%% cal_freq_new
+    def cal_freq_new(self,  min_delta=10e3,
+                        check_mixers = False,
+                        recalibrate_pulses = True,
+                        dt_scaling = 4,
+                        num_tries = 10,
+                        **kwargs):
 
-        # if delta2 > delta:
-        #     print(f"Ramsey frequency increased, RUNNING third Ramsey experiment with detuning {-delta}...")
-        #     dt = tmax / 1000
-        #     t_arr, I, Q, job, fitted_pars = self.pulse_exp(exp='ramsey', detuning = -delta, check_mixers = check_mixers,dt=dt,tmin=20,tmax=tmax, **kwargs)
-        #     delta3 = abs(fitted_pars[1]) * 1e6
-        # else:
-        #     print(f"Ramsey frequency decreased, RUNNING third Ramsey experiment with detuning {delta}...")
-        #     dt = tmax / 1000
-        #     t_arr, I, Q, job, fitted_pars = self.pulse_exp(exp='ramsey', detuning = delta, check_mixers = check_mixers, dt=dt,tmin=20,tmax=tmax, **kwargs)
-        #     correction = delta
+        # initial Ramsey experiment to find current detuning
+        print("RUNNING initial Ramsey experiment...")
+        t_arr, I, Q, job, fitted_pars = self.pulse_exp(exp='ramsey', check_mixers = check_mixers,dt=40,tmin=20,tmax=2e4,detuning=0,**kwargs)
 
-        # if abs(correction) < min_delta:
-        #     print('Qubit Frequency found')
-        #     self.update_value('qubit_freq',self.pars['qubit_freq'] + correction)
+        delta = abs(fitted_pars[1]) * 1e6
+        tau = fitted_pars[3] * 1e3
+        tmax = 2 * tau
+
+        delta_dict = { delta : {"freq" : self.pars['qubit_freq'], "tried_increase" : False}}
+        #
 
 
+        for n in np.arange(0, num_tries - 1):
+
+            # update value of qubit_freq to be that corresponding to the smallest delta in delta_dict,
+            # plus or minus delta
+            delta = min(delta_dict.keys())
+            old_freq = delta_dict[delta]["freq"]
+            tried_increase = delta_dict[delta]["tried_increase"]
+            if not tried_increase:
+                self.update_value('qubit_freq', old_freq + delta)
+                delta_dict[delta]["tried_increase"] = True
+            else:
+                self.update_value('qubit_freq', old_freq - delta)
+
+            # choose appropriate dt for the frequency we're trying to resolve
+            if delta < 100e3:
+                scaling = dt_scaling * 8
+            else:
+                scaling = dt_scaling
+
+            dt = round(get_dt(target_fs=delta)/scaling)
+
+            # run Ramsey experiment and get new delta
+            t_arr, I, Q, job, fitted_pars = self.pulse_exp(exp='ramsey', detuning = 0e6, check_mixers = check_mixers,dt=dt,tmin=20,tmax=tmax, **kwargs)
+            delta_result = abs(fitted_pars[1]) * 1e6
+
+            if delta_result < min_delta:
+                print(f'SUCCESS: delta_result < min_delta = {round(min_delta/1e3, ndigits=6)} kHz :) ')
+                rounded_freq = round_from_uncertainty(self.pars['qubit_freq'], 1e2, scale=1e9) # round frequency to nearest kHz
+                self.update_value('qubit_freq', rounded_freq)
+
+                if recalibrate_pulses:
+                    self.cal_pulse(pulse = 'pi', pulse_len_target = self.pars['pi_len'], **kwargs)
+                    self.cal_pulse(pulse = 'pi_half', pulse_len_target = self.pars['pi_half_len'], **kwargs)
+
+                return # if we were successful, we skip over the statement at the end
+            # ONLY if we did better than before, add the new delta_result and qubit freq to the dict
+            elif delta_result < delta:
+                delta_dict[delta_result] = {"freq" : self.pars["qubit_freq"], "tried_increase" : False}
+
+        delta = min(delta_dict.keys())
+        freq = delta_dict[delta]["freq"]
+        self.update_value('qubit_freq', freq)
+
+        print(f"Didn't converge within min_freq = {minfreq} within {num_tries} tries. The best result was {round(delta/1e3, digits=3)} kHz at qubit freq {round(freq / 1e9, 7)} GHz.")
+
+
+#%%% calibrate
+    def calibrate(self,   pulse_len_target = 48,
+                          starting_amp = 0.44,
+                          min_delta = 10e3,
+                          recalibrate_pulses = True,
+                          T1_kwargs     = {"dt": 1e3, "tmin" : 100, "tmax" : 100e3},
+                          ramsey_kwargs = {"dt": 200, "tmin" : 20, "tmax" : 40e3},
+                          echo_kwargs   = {"dt": 1e3, "tmin" : 50, "tmax" : 120e3},
+                          **kwargs
+                          ):
+
+        # time of flight
+        self.tof_cal() # this can be modified to actually calibrate tof automatically, rather than just display plot
+
+        # pi pulse length / time
+        self.cal_pulse(pulse = 'pi', pulse_len_target = pulse_len_target, starting_amp = starting_amp, **kwargs)
+        self.cal_pulse(pulse = 'pi_half', pulse_len_target = pulse_len_target, starting_amp = starting_amp, **kwargs)
+
+        # frequency
+        self.cal_freq(min_delta = min_delta, recalibrate_pulses = recalibrate_pulses, **kwargs)
+
+        # T1, T2 ramsey, T2 echo
+        print("RUNNING longer fit experiments...")
+        t_arr, I, Q, job, fitted_pars = self.pulse_exp(exp='T1', check_mixers=True, **T1_kwargs, **kwargs)
+        T1 = fitted_pars[1]
+
+        t_arr, I, Q, job, fitted_pars = self.pulse_exp(exp='ramsey', check_mixers=True, **ramsey_kwargs, **kwargs)
+        T2_ramsey = fitted_pars[3]
+
+        t_arr, I, Q, job, fitted_pars = self.pulse_exp(exp='echo', check_mixers=True, **echo_kwargs, **kwargs)
+        T2_echo = fitted_pars[1]
+
+        print(f"CALIBRATION SUCCESSFUL. Qubit parameters: \nT1 = {T1}, \nT2 ramsey = {T2_ramsey}, \nT2_echo = {T2_echo} ")
 
 
 
@@ -1333,8 +1433,17 @@ class qubit():
 
         return np.r_[np.zeros(delay), amp * np.exp(-(gauss_arg ** 2) / 2), np.zeros(4)]
 
+    #%%%%
+    def init_instruments(self):
+
+        inst.set_qb_LO(self.pars['qubit_LO'])
+        inst.set_rr_LO(self.pars['rr_LO'])
+        inst.set_attenuator(self.pars['rr_atten'])
+
+
     #%%%% update_value
     def update_value(self,key,value):
+        print(f'Updating {key} to {value}')
         self.pars[key] = value
         self.make_config(self.pars)
 
@@ -1347,9 +1456,24 @@ class qubit():
         elif key == 'qubit_freq':
             self.update_value('qubit_IF',self.pars['qubit_freq']-self.pars['qubit_LO'])
 
-        print(f'Updating {key} to {value}')
-        with open(f'{self.pars["name"]}_pars.json', "w") as outfile:
+        self.write_pars()
+
+    #%%%% write_pars
+    def write_pars(self):
+        with open(f'{self.name}_pars.json', "w") as outfile:
             json.dump(self.pars, outfile)
+
+    #%%%% remove_key
+    def remove_key(self, key):
+        print(f'Removing {key} from pars')
+        del self.pars[key]
+        self.write_pars()
+
+    #%%%% add_key
+    def add_key(self, key, value):
+        print(f'Adding {key} = {value} to pars')
+        self.pars[key] = value
+        self.write_pars()
 
     #%%% Make Config
     #%%%% make_config
@@ -1440,7 +1564,7 @@ class qubit():
                 },
                 "pi_pulse1": {
                     "operation": "control",
-                    "length": 2*pars['pi_half_len'],
+                    "length": pars['pi_len'],
                     "waveforms": {
                         "I": "pi_wf_i1",
                         "Q": "pi_wf_q1",
@@ -1448,7 +1572,7 @@ class qubit():
                 },
                 "Xpi_pulse": {
                     "operation": "control",
-                    "length": 2*pars['pi_half_len'],
+                    "length": pars['pi_len'],
                     "waveforms": {
                         "I": "pi_wf_i1",
                         "Q": "pi_wf_q1",
@@ -1456,7 +1580,7 @@ class qubit():
                 },
                 "Ypi_pulse": {
                     "operation": "control",
-                    "length": 2*pars['pi_half_len'],
+                    "length": pars['pi_len'],
                     "waveforms": {
                         "I": "pi_wf_q1",
                         "Q": "pi_wf_i1",
@@ -1530,9 +1654,9 @@ class qubit():
                 "gaussian_wf": {"type": "arbitrary", "samples": [float(arg) for arg in pars['gauss_amp'] * gaussian(pars['gauss_len'], pars['gauss_len']/5)]},
                 "gaussian_4ns_wf": {"type": "arbitrary", "samples": gauss_wf_4ns},
                 "ro_wf1": {"type": "constant", "sample": pars['amp_r']},
-                "pi_wf_i1": {"type": "arbitrary", "samples": [float(arg) for arg in pars['pi_amp'] * gaussian(2*pars['pi_half_len'], 2*pars['pi_half_len']/5)]},
+                "pi_wf_i1": {"type": "arbitrary", "samples": [float(arg) for arg in pars['pi_amp'] * gaussian(pars['pi_len'], pars['pi_len']/5)]},
                 "pi_wf_q1": {"type": "constant", "sample": 0.0},
-                "pi_half_wf_i1": {"type": "arbitrary", "samples": [float(arg) for arg in pars['pi_amp'] * gaussian(pars['pi_half_len'], pars['pi_half_len']/5)]},
+                "pi_half_wf_i1": {"type": "arbitrary", "samples": [float(arg) for arg in pars['pi_half_amp'] * gaussian(pars['pi_half_len'], pars['pi_half_len']/5)]},
                 "pi_half_wf_q1": {"type": "constant", "sample": 0.0},
                 "arb_wfm": {"type": "arbitrary", "samples": [0.2]*10+[0.3]*10+[0.25]*20},
             },
