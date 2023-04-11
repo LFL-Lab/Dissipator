@@ -18,27 +18,29 @@ client = Labber.connectToServer()
 # qmm = QuantumMachinesManager()
 # qm = qmm.open_qm(config)
 qubit_LO_model = 'SignalCore SC5506A Signal Generator'
-qubit_LO_name = '10002A08' 
+qubit_LO_name = '10002A07' 
 qubit_LO_quantity_name = {'freq':'RF1 frequency',
                           'power': 'RF1 power level',
                           'output': 'RF1 output status'}
 
 rr_LO_model = 'SignalCore SC5511A Signal Generator'
-rr_LO_name = '10002A05'
+rr_LO_name = '10002A06'
 rr_LO_quantity_name = {'freq': 'Frequency',
                        'power': 'Power',
                        'output':'Output status'}
 
-ffl_LO_model = 'BNC 845 Signal Generator'
-ffl_LO_name = 'FFL drive'
+ffl_LO_model = 'SignalCore SC5511A Signal Generator'
+ffl_LO_name = '10002F1D'
 ffl_LO_quantity_name = {'freq': 'Frequency',
-                       'output':'Output'}
+                        'power': 'Power',
+                       'output':'Output status'}
 
 diss_LO_model = 'SignalCore SC5511A Signal Generator'
 diss_LO_name = '10002F25'
 diss_LO_quantity_name = {'freq': 'Frequency',
                         'power': 'Power',
                         'output':'Output status'}
+
 
 def set_qb_LO(freq):
     print(f'Setting qubit LO to {round(freq*1e-9,5)} GHz')
@@ -97,6 +99,7 @@ def set_ffl_LO(freq):
     fLO = client.connectToInstrument(ffl_LO_model, dict(name=ffl_LO_name, startup = 'Get config'))
     fLO.startInstrument()
     fLO.setValue('Frequency', freq)
+    fLO.setValue(ffl_LO_quantity_name['power'], 15)
     fLO.setValue(ffl_LO_quantity_name['output'],True)
     
 
@@ -110,11 +113,19 @@ def turn_off_ffl_drive():
     fLO = client.connectToInstrument(ffl_LO_model, dict(name=ffl_LO_name, startup = 'Get config'))
     fLO.startInstrument()
     fLO.setValue(ffl_LO_quantity_name['output'],False)
+
+
     
 def turn_diss_LO_off():
     dLO = client.connectToInstrument(diss_LO_model, dict(name=diss_LO_name, startup = 'Get config'))
     dLO.startInstrument()
     dLO.setValue(diss_LO_quantity_name['output'],False)
+    
+        
+def turn_rr_LO_off():
+    rLO = client.connectToInstrument(rr_LO_model, dict(name=rr_LO_name, startup = 'Get config'))
+    rLO.startInstrument()
+    rLO.setValue(rr_LO_quantity_name['output'],False)
     
 def turn_qb_LO_off():
     qLO = client.connectToInstrument(qubit_LO_model, dict(name=qubit_LO_name, startup = 'Get config'))
@@ -123,13 +134,13 @@ def turn_qb_LO_off():
     
 def set_attenuator(attenuation):
     # initialize digital attenuator
-    attn = client.connectToInstrument('Vaunix Lab Brick Digital Attenuator',dict(name='readout attenuator',address='26776'))
+    attn = client.connectToInstrument('Vaunix Lab Brick Digital Attenuator',dict(name='readout attenuator',address='26551'))
     attn.startInstrument()
     attn.setValue('Attenuation',attenuation)
 
 def get_attenuation():
     # initialize digital attenuator
-    attn = client.connectToInstrument('Vaunix Lab Brick Digital Attenuator',dict(name='readout attenuator',address='26776'))
+    attn = client.connectToInstrument('Vaunix Lab Brick Digital Attenuator',dict(name='readout attenuator',address='26551'))
     attn.startInstrument()
 
     return attn.getValue('Attenuation')

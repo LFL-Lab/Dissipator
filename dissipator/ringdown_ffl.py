@@ -20,19 +20,21 @@ from datetime import datetime
 import os
 
 qb = qubit('logical')
-qb.update_value('ffl_freq', 2.85e9)
-qb.update_value('ffl_LO', 2.8e9)
+qb.update_value('ffl_freq', 3.9e9)
+qb.update_value('ffl_LO', 3.85e9)
 qb.update_value('ffl_IF', 0.05e9)
 qb.update_value('amp_ffl', 0.45)
 inst.set_ffl_LO(qb.pars['ffl_LO']) # turn on
-inst.set_rr_LO(qb.pars['rr_LO']) # turn on
+inst.set_rr_LO(qb.pars['rr_LO'])# turn on
+#inst.turn_off_ffl_drive()
+
 bOptimizeMixer = False
 
 from instrument_init import init_sa, init_sa_by_serial_number
 
 if bOptimizeMixer:
     # mixer optimization
-    ref_H = 0
+    ref_H = 20
     ref_L = -30
     qb.play_pulses()
     sa = init_sa_by_serial_number(20234492)
@@ -43,15 +45,15 @@ if bOptimizeMixer:
     '''Optimize FFL mixer'''
     qb.opt_mixer(sa, cal='LO', freq_span = 1e6, reference = ref_H, mode='coarse', element = 'ffl')
     qb.opt_mixer(sa, cal='LO', freq_span = 1e6, reference = ref_H, mode='intermediate', element = 'ffl')
-    # qb.opt_mixer(sa, cal='LO', freq_span = 1e6, reference = ref_L, mode='fine', element = 'ffl')
+    qb.opt_mixer(sa, cal='LO', freq_span = 1e6, reference = ref_L, mode='fine', element = 'ffl')
     qb.opt_mixer(sa, cal='SB', freq_span = 1e6, reference = ref_H, mode='coarse', element = 'ffl')
     qb.opt_mixer(sa, cal='SB', freq_span = 1e6, reference = ref_H, mode='intermediate', element = 'ffl')
     # qb.opt_mixer(sa, cal='SB', freq_span = 1e6, reference = ref_L, mode='fine',element = 'ffl')
     
     sa_close_device(sa)
     sa = init_sa_by_serial_number(20234229)
-    set_attenuator(0)
-    get_attenuation()
+    inst.set_attenuator(0)
+    inst.get_attenuation()
     rr_lo_leakage = qb.get_power(sa, freq=qb.pars['rr_LO'],reference=ref_H,config=True,plot=True) # reference should be set ABOVE expected image power
     rr_im_leakage = qb.get_power(sa, freq=qb.pars['rr_LO']-qb.pars['rr_IF'],span = 1e6,reference=ref_H,config=True,plot=True) # reference should be set ABOVE expected image power
     rr_on_power = qb.get_power(sa, freq=qb.pars['rr_LO']+qb.pars['rr_IF'],reference=ref_H,config=True,plot=True) # reference should be set ABOVE expected image power
@@ -216,7 +218,7 @@ def save_datadict_to_fgroup(f, name, datadict):
 
 
 #%% doing sweeps
-def sweep_powers(ffl_freq = 6.6e9,rr_atten = 23, n_avg=4000):
+def sweep_powers(ffl_freq = 3.9e9,rr_atten = 23, n_avg=4000):
     qb.update_value('ffl_freq', ffl_freq)
     ffl_scales = np.round(np.linspace(0.0,1.0,20),2)
     # rr_scales = np.round(np.linspace(0.1,1,10), 2)
@@ -246,20 +248,20 @@ def main():
     # save data
     qb.update_value('rr_pulse_len_in_clk',int(500)) # default 500
     qb.update_value('rr_atten', 35) # default = 23
-    device = 'diss08_07A'
+    device = 'diss08_09'
     today = datetime.today()
     sDate =  today.strftime("%Y%m%d")
     saveDir = f'G:\\Shared drives\\CavityCooling\data\\{device}\\{sDate}\\ringdown'
     
     start = timeit.default_timer()   
     # LO_freqs = np.linspace(5.5e9, 7.5e9, 5)
-    for rr_atten in [35]:
+    for rr_atten in [32,34,36,38,40,42,44,46,48,50,52,54,56]:
         # do res spec
         inst.turn_off_ffl_drive()
-        I, Q, freqs, job = qb.resonator_spec(f_LO=qb.pars['rr_LO'],atten=rr_atten,IF_min=30e6,IF_max=60e6,df=0.1e6,n_avg=1000,savedata=True)
+        I, Q, freqs, job = qb.resonator_spec(f_LO=qb.pars['rr_LO'],atten=rr_atten,IF_min=30e6,IF_max=60e6,df=0.1e6,n_avg=2000,savedata=True)
         fc,fwhm = pf.fit_res(freqs,np.abs(I+1j*Q))
         qb.update_value('rr_freq', fc)
-        dataDict = measure_ringdown_drive_off(amp_r_scale=1, tmax=4e3, dt=16, n_avg=10000)
+        dataDict = measure_ringdown_drive_off(amp_r_scale=1, tmax=8e3, dt=16, n_avg=10000)
         inst.turn_on_ffl_drive()
         sweep_powers(ffl_freq = qb.pars['ffl_freq'],rr_atten = rr_atten,n_avg=100000)
         stop = timeit.default_timer()

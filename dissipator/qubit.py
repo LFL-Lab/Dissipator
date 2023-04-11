@@ -26,11 +26,12 @@ from datetime import date
 from pathlib import Path
 import Labber
 import warnings
+import matplotlib.pyplot as plt
 
-host='10.71.0.57'
+host='10.71.0.56'
 port='9510'
 logger.setLevel(level='WARNING')
-device = 'diss08_07A'
+device = 'diss08_09'
 today = date.today()
 sDate =  today.strftime("%Y%m%d")
 saveDir = f'G:\\Shared drives\\CavityCooling\\data\\{device}\\{sDate}'
@@ -134,7 +135,8 @@ class qubit():
     #%%% punchout
     def punchout(self,
                  df = 0.1e6,
-                 span = 20e6,
+                 IF_min = 10e6,
+                 IF_max = 20e6,
                  n_avg = 500,
                  atten_range = [10,30],
                  atten_step = 0.1,
@@ -162,33 +164,25 @@ class qubit():
             iteration = 1
 
         attenuation_range = np.arange(atten_range[0],atten_range[1],step=atten_step)
-        freq_arr = np.zeros((int(span/df),len(res_freq)))
-        I = np.zeros((len(attenuation_range),int(span/df),len(res_freq)))
-        Q = np.zeros((len(attenuation_range),int(span/df),len(res_freq)))
-        mag = np.zeros((len(attenuation_range),int(span/df),len(res_freq)))
-        magData = np.zeros((len(attenuation_range),int(span/df)))
+        freqs = np.arange(IF_min, IF_max + df/2, df, dtype=int)
+        I = np.zeros((len(attenuation_range),len(freqs)))
+        Q = np.zeros((len(attenuation_range),len(freqs)))
+        mag = np.zeros((len(attenuation_range),len(freqs)))
+   
 
-        i = 0
-        for fc in res_freq:
-            print(f'Measuring resonator at {fc*1e-9} GHz')
-            f_LO = fc - span/2
-            j = 0
-            for a in attenuation_range:
-                print(f'Attenuation = {a} dB')
-                dataI,dataQ,freqs,job = self.resonator_spec(f_LO=f_LO,atten=a,IF_min=df,IF_max=span,df=df,n_avg=n_avg,res_ringdown_time=res_ringdown_time,savedata=False,fit=False)
-                freq_arr[:,i] = freqs
-                I[j,:,i] = dataI
-                Q[j,:,i] = dataQ
-                mag[j,:,i] = np.abs(dataI+1j*dataQ)
-                j += 1
-            chi= freqs[np.argmin(mag[0,:,i])] - freqs[np.argmin(mag[-1,:,i])]
-            print(f'Dispersive shift for resonator at {round(fc*1e-9,5)} GHz: {round(0.5*chi/np.pi*1e-3,1)} kHz')
-            pf.heatplot(xdata=np.around(freqs*1e-9,4),ydata=attenuation_range,data=pf.Volt2dBm(mag[:,:,i]),xlabel='Frequency (GHz)',ylabel='Attenuation (dB)',cbar_label='Magnitude (dBm)')
-            i += 1
-
+        for i,a in enumerate(attenuation_range):
+            print(f'Attenuation = {a} dB')
+            dataI,dataQ,freqs,job = self.resonator_spec(f_LO=self.pars['rr_LO'],atten=a,IF_min=IF_min,IF_max=IF_max,df=df,n_avg=n_avg,res_ringdown_time=res_ringdown_time,savedata=False,fit=False)
+            I[i,:] = dataI
+            Q[i,:] = dataQ
+            mag[i,:] = np.abs(dataI+1j*dataQ) * 2**(a/20)
+        
+        for i,a in enumerate(attenuation_range):
+            plt.plot(freqs, mag[i,:], label=f'atten={a}dB')
+        plt.legend()
         exp_dict = {'date/time':    datetime.now(),
                    'nAverages': n_avg,
-                         'w_LO': pars['rr_LO'],
+                         'w_LO': self.pars['rr_LO'],
                          'attenuation': attenuation_range,
                 'wait_period':  res_ringdown_time,
                 }
@@ -201,11 +195,11 @@ class qubit():
             writer = csv.writer(datafile)
             writer.writerow(exp_dict.keys())
             writer.writerow(exp_dict.values())
-            writer.writerow(freq_arr)
+            writer.writerow(freqs)
             writer.writerow(I)
             writer.writerow(Q)
 
-        return I, Q, freq_arr, job
+        return I, Q, freqs, job
 
 
     #%%% run_scan
@@ -436,7 +430,8 @@ class qubit():
 
 
         self.update_value('qubit_LO',value = f_LO)
-        self.update_value('rr_LO', value = self.pars['rr_freq'] - self.pars['rr_IF'])
+        inst.set_qb_LO(f_LO)
+        # self.update_value('rr_LO', value = self.pars['rr_freq'] - self.pars['rr_IF'])
 
         self.check_mix_cal(sa,check=check_mixers,amp_q = amp_q_scaling, threshold = - 60)
 
@@ -484,7 +479,7 @@ class qubit():
                     writer = csv.writer(datafile)
                     writer.writerow(exp_dict.keys())
                     writer.writerow(exp_dict.values())
-                    writer.writerow(freqs)
+                    writer.writerow(freq_arr)
                     writer.writerow(I)
                     writer.writerow(Q)
         return I, Q, freq_arr, job;
@@ -1570,7 +1565,7 @@ class qubit():
         inst.set_qb_LO(self.pars['qubit_LO'])
         inst.set_rr_LO(self.pars['rr_LO'])
         inst.set_ffl_LO(self.pars['ffl_LO'])
-        inst.set_diss_LO(self.pars['diss_LO'])
+        #inst.set_diss_LO(self.pars['diss_LO'])
         inst.set_attenuator(self.pars['rr_atten'])
 
 
@@ -1621,13 +1616,13 @@ class qubit():
             "version": 1,
 
             "controllers": {
-                "con2": {
+                "con1": {
                     "type": "opx1",
                     "analog_outputs": {
-                        1: {"offset": pars['qubit_mixer_offsets'][0]},  # qubit I
-                        2: {"offset": pars['qubit_mixer_offsets'][1]},  # qubit Q
-                        3: {"offset": pars['rr_mixer_offsets'][0]},  # rr I
-                        4: {"offset": pars['rr_mixer_offsets'][1]},  # rr Q
+                        1: {"offset": pars['rr_mixer_offsets'][0]},  # qubit I
+                        2: {"offset": pars['rr_mixer_offsets'][1]},  # qubit Q
+                        3: {"offset": pars['qubit_mixer_offsets'][0]},  # rr I
+                        4: {"offset": pars['qubit_mixer_offsets'][1]},  # rr Q
                         5: {"offset": pars['ffl_mixer_offsets'][0]},  # ffl I
                         6: {"offset": pars['ffl_mixer_offsets'][1]},  # ffl Q
                         7: {"offset": pars['diss_mixer_offsets'][0]},  # diss I
@@ -1644,8 +1639,8 @@ class qubit():
             "elements": {
                 "qubit": {
                     "mixInputs": {
-                        "I": ("con2", 3),
-                        "Q": ("con2", 4),
+                        "I": ("con1", 3),
+                        "Q": ("con1", 4),
                         "lo_frequency": pars['qubit_LO'],
                         "mixer": "qubit",
                     },
@@ -1666,8 +1661,8 @@ class qubit():
                 },
                 "diss": {
                     "mixInputs": {
-                        "I": ("con2", 7),
-                        "Q": ("con2", 8),
+                        "I": ("con1", 7),
+                        "Q": ("con1", 8),
                         "lo_frequency": pars['diss_LO'],
                         "mixer": "diss",
                     },
@@ -1679,15 +1674,15 @@ class qubit():
                 },
                 "rr": {
                     "mixInputs": {
-                        "I": ("con2", 1),
-                        "Q": ("con2", 2),
+                        "I": ("con1", 1),
+                        "Q": ("con1", 2),
                         "lo_frequency": pars['rr_LO'],
                         "mixer": "rr",
                     },
                     "intermediate_frequency": pars['rr_IF'],
                     "outputs": {
-                        "out1": ("con2", 1),
-                        "out2": ("con2", 2),
+                        "out1": ("con1", 1),
+                        "out2": ("con1", 2),
                     },
                     "time_of_flight": pars['tof'], # should be multiple of 4 (at least 24)
                     "smearing": 0, # adds 40ns of data from each side of raw adc trace to account for ramp up and down of readout pulse
@@ -1701,8 +1696,8 @@ class qubit():
                 },
                 "ffl": {
                     "mixInputs": {
-                        "I": ("con2", 5),
-                        "Q": ("con2", 6),
+                        "I": ("con1", 5),
+                        "Q": ("con1", 6),
                         "lo_frequency": pars['ffl_LO'],
                         "mixer": "ffl",
                     },
