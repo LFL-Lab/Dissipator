@@ -131,8 +131,20 @@ def get_attenuation():
     # initialize digital attenuator
     attn = client.connectToInstrument('Vaunix Lab Brick Digital Attenuator',dict(name='readout attenuator',address='26776'))
     attn.startInstrument()
-
     return attn.getValue('Attenuation')
+
+def set_ffl_attenuator(attenuation):
+    # initialize digital attenuator
+    attn = client.connectToInstrument('Vaunix Lab Brick Digital Attenuator',dict(name='ffl attenuator',address='24680'))
+    attn.startInstrument()
+    attn.setValue('Attenuation',attenuation)
+
+def get_ffl_attenuation():
+    # initialize digital attenuator
+    attn = client.connectToInstrument('Vaunix Lab Brick Digital Attenuator',dict(name='ffl attenuator',address='24680'))
+    attn.startInstrument()
+    return attn.getValue('Attenuation')
+
 
 def init_sa():
     sa = sa_open_device()["handle"]

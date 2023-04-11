@@ -186,7 +186,7 @@ def heatplot(xdata, ydata, data, xlabel = "", ylabel = "", normalize=False, cbar
 
 #%% plot_single_shot
 def plot_single_shot(datadict, axes=0):
-
+    datadict = {key: np.array(value, dtype=float) for key,value in datadict.items()}
     datadict = {key: value*1e3 for key,value in datadict.items()} # convert to mV
     datadict = {key: value.tolist() for key,value in datadict.items()} # convert to list
 

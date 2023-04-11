@@ -8,9 +8,11 @@ import os
 from qubit import qubit
 
 qb = qubit('logical')
-qb.update_value('ffl_LO', 6.550e9)
-qb.update_value('ffl_IF', 50e6)
-qb.update_value('amp_ffl', 0.45)
+
+qb.update_value('ffl_freq', 2.85e6)
+qb.update_value('ffl_LO', 2.8e9)
+qb.update_value('ffl_IF', qb.pars['ffl_freq'] - qb.pars['ffl_LO'])
+
 inst.set_ffl_LO(qb.pars['ffl_LO']) # turn on
 bOptimizeMixer = False
 if bOptimizeMixer:

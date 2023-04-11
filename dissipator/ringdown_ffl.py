@@ -32,10 +32,9 @@ from instrument_init import init_sa, init_sa_by_serial_number
 
 if bOptimizeMixer:
     # mixer optimization
-    ref_H = 0
-    ref_L = -30
+    ref_H = 10
+    ref_L = -55
     qb.play_pulses()
-    sa = init_sa_by_serial_number(20234492)
     qb_lo_leakage = qb.get_power(sa, freq=qb.pars['ffl_LO'],reference=ref_H,config=True,plot=True)
     qb_im_leakage = qb.get_power(sa, freq=qb.pars['ffl_LO']-qb.pars['ffl_IF'],reference=ref_H,config=True,plot=True)
     qb_on_power = qb.get_power(sa, freq=qb.pars['ffl_LO']+qb.pars['ffl_IF'],reference=ref_H, config=True,plot=True) # reference should be set ABOVE expected image power
@@ -43,13 +42,12 @@ if bOptimizeMixer:
     '''Optimize FFL mixer'''
     qb.opt_mixer(sa, cal='LO', freq_span = 1e6, reference = ref_H, mode='coarse', element = 'ffl')
     qb.opt_mixer(sa, cal='LO', freq_span = 1e6, reference = ref_H, mode='intermediate', element = 'ffl')
-    # qb.opt_mixer(sa, cal='LO', freq_span = 1e6, reference = ref_L, mode='fine', element = 'ffl')
+    qb.opt_mixer(sa, cal='LO', freq_span = 1e6, reference = ref_L, mode='fine', element = 'ffl')
     qb.opt_mixer(sa, cal='SB', freq_span = 1e6, reference = ref_H, mode='coarse', element = 'ffl')
     qb.opt_mixer(sa, cal='SB', freq_span = 1e6, reference = ref_H, mode='intermediate', element = 'ffl')
-    # qb.opt_mixer(sa, cal='SB', freq_span = 1e6, reference = ref_L, mode='fine',element = 'ffl')
+    qb.opt_mixer(sa, cal='SB', freq_span = 1e6, reference = ref_L, mode='fine',element = 'ffl')
     
-    sa_close_device(sa)
-    sa = init_sa_by_serial_number(20234229)
+    '''readout mixer'''
     set_attenuator(0)
     get_attenuation()
     rr_lo_leakage = qb.get_power(sa, freq=qb.pars['rr_LO'],reference=ref_H,config=True,plot=True) # reference should be set ABOVE expected image power
@@ -63,7 +61,7 @@ if bOptimizeMixer:
     qb.opt_mixer(sa, cal='SB', freq_span = 1e6,  mode='coarse', reference = ref_H, element='rr')
     qb.opt_mixer(sa, cal='SB', freq_span = 1e6, mode='intermediate',reference = ref_H, element='rr')
     qb.opt_mixer(sa, cal='SB', freq_span = 1e6, mode='fine', reference = ref_L, element='rr')
-    sa_close_device(sa)
+
     
     qb.write_pars()
 
@@ -259,9 +257,12 @@ def main():
         I, Q, freqs, job = qb.resonator_spec(f_LO=qb.pars['rr_LO'],atten=rr_atten,IF_min=30e6,IF_max=60e6,df=0.1e6,n_avg=1000,savedata=True)
         fc,fwhm = pf.fit_res(freqs,np.abs(I+1j*Q))
         qb.update_value('rr_freq', fc)
-        dataDict = measure_ringdown_drive_off(amp_r_scale=1, tmax=4e3, dt=16, n_avg=10000)
+        # dataDict = measure_ringdown_drive_off(amp_r_scale=1, tmax=4e3, dt=16, n_avg=10000)
         inst.turn_on_ffl_drive()
-        sweep_powers(ffl_freq = qb.pars['ffl_freq'],rr_atten = rr_atten,n_avg=100000)
+        step_size = 50e6
+        ffl_freq_list = [qb.pars["ffl_freq"] + step_size * n for n in range(-6,6)]
+        for ffl_freq in ffl_freq_list:
+            sweep_powers(ffl_freq = ffl_freq,rr_atten = rr_atten,n_avg=100000)
         stop = timeit.default_timer()
         print('Time: ', stop - start)  
 

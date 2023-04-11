@@ -1485,7 +1485,7 @@ class qubit():
             "version": 1,
 
             "controllers": {
-                "con1": {
+                "con2": {
                     "type": "opx1",
                     "analog_outputs": {
                         1: {"offset": pars['qubit_mixer_offsets'][0]},  # qubit I

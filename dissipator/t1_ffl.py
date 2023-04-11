@@ -14,19 +14,25 @@ Created on Sat Mar  4 11:40:45 2023
 from qubit import *
 import instrument_init as inst
 import h5py
+import timeit
 
 qb = qubit('logical')
-qb.pars['ffl_LO']=7600000000
+qb.update_value('diss_freq', 8.5301e9)
+qb.update_value('ffl_freq', qb.pars['diss_freq'] - qb.pars['qubit_freq'])
+qb.update_value('ffl_LO', 3.8e9)
+qb.update_value('ffl_IF', qb.pars['ffl_freq'] - qb.pars['ffl_LO'])
+qb.add_key('ffl_atten', 5)
 inst.set_ffl_LO(qb.pars['ffl_LO']) # turn on
 inst.set_qb_LO(qb.pars['qubit_LO'])
+inst.set_ffl_attenuator(qb.pars['ffl_atten'])
 bOptimizeMixer = False
 bCalibratePi = False
 
 #%% mixer optimization
 if bOptimizeMixer:
-    inst.main()
-    ref_H = 20
-    ref_L = -30
+    inst.init_sa()
+    ref_H = -10
+    ref_L = -60
     qb.play_pulses()
     # qubit mixer
     qb_lo_leakage = qb.get_power(sa, freq=qb.pars['qubit_LO'],reference=ref_H,config=True,plot=True)
@@ -57,8 +63,6 @@ if bOptimizeMixer:
     qb.opt_mixer(sa, cal='SB', freq_span = 1e6, mode='fine', reference = ref_L, element='rr')
     
     # FFL mixer
-    sa_close_device(sa)
-    sa = init_sa_by_serial_number(20234492)
     rr_lo_leakage = qb.get_power(sa, freq=qb.pars['ffl_LO'],reference=ref_H,config=True,plot=True) # reference should be set ABOVE expected image power
     rr_im_leakage = qb.get_power(sa, freq=qb.pars['ffl_LO']-qb.pars['ffl_IF'],span = 1e6,reference=ref_H,config=True,plot=True) # reference should be set ABOVE expected image power
     rr_on_power = qb.get_power(sa, freq=qb.pars['ffl_LO']+qb.pars['ffl_IF'],reference=ref_H,config=True,plot=True) # reference should be set ABOVE expected image power
@@ -75,7 +79,7 @@ if bOptimizeMixer:
 if bCalibratePi:
     print(f'pi_amp = {qb.pars["pi_amp"]}')
     qb.update_value('pi_len', 64)
-    amps, I, Q, job, period = qb.power_rabi(a_min = 0.01, a_max = 1.5, da = 0.005,  n_avg = 1000,fit = True, plot = True, detuning = 0e6, check_mixers = False)
+    amps, I, Q, job, period = qb.power_rabi(a_min = 0.01, a_max = 2, da = 0.005,  n_avg = 2000,fit = True, plot = True, detuning = 0e6, check_mixers = False)
     qb.update_value('pi_amp', round(qb.pars["pi_amp"] * period/2,3))
     
     t_arr, I, Q, job, pi2width = qb.pulse_exp(exp='rabi',n_avg = 1000, tmin = 16,tmax = 640, dt = 4, amp_q_scaling = 1, fit = True, plot = True,detuning = 0e6, check_mixers=False)
@@ -138,9 +142,9 @@ def measure_t1_w_ffl(amp_r_scale=1,
                  qubitDriveFreq=qb.pars['qubit_LO']+qb.pars['qubit_IF'],qb_power = -8,iteration=1)
     dataDict = {'metadata': {'amp_r_scale': amp_r_scale,
                              'amp_ffl_scale': amp_ffl_scale,
-                             'tmin': 16,
-                             'tmax': 2e3,
-                             'dt': 16,
+                             'tmin': tmin,
+                             'tmax': tmax,
+                             'dt': dt,
                              'n_avg': n_avg,},
                 'time': t_arr,
                 'I': I,
@@ -199,14 +203,14 @@ def measure_t1_ffl_off(amp_r_scale=1,
     Q = np.array(datadict["Q"])
     ydata = np.abs(I+1j*Q)
     
-    fitted_pars, error = pf.fit_data(t_arr,ydata,sequence='ramsey',dt=t_arr[-1]*1e-6/len(t_arr))
-    fig = pf.plot_data(t_arr,ydata,sequence='ramsey',fitted_pars=fitted_pars,nAverages=n_avg, pi2Width=qb.pars['pi_half_len'],
+    fitted_pars, error = pf.fit_data(t_arr,ydata,sequence='T1',dt=t_arr[-1]*1e-6/len(t_arr))
+    fig = pf.plot_data(t_arr,ydata,sequence='T1',fitted_pars=fitted_pars,nAverages=n_avg, pi2Width=qb.pars['pi_half_len'],
                  qubitDriveFreq=qb.pars['qubit_LO']+qb.pars['qubit_IF'],qb_power = -8,iteration=1)
     dataDict = {'metadata': {'amp_r_scale': amp_r_scale,
                              'amp_ffl_scale': amp_ffl_scale,
-                             'tmin': 16,
-                             'tmax': 2e3,
-                             'dt': 16,
+                             'tmin': tmin,
+                             'tmax': tmax,
+                             'dt': dt,
                              'n_avg': n_avg,},
                 'time': t_arr,
                 'I': I,
@@ -215,24 +219,35 @@ def measure_t1_ffl_off(amp_r_scale=1,
         }
     return dataDict, fig
 
-device = 'diss08_07A'
-today = datetime.today()
-sDate =  today.strftime("%Y%m%d")
-expName = 'T1wFFL'
-saveDir = f'G:\\Shared drives\\CavityCooling\data\\{device}\\{sDate}\\{expName}'
-n_avg = 5000
-if not os.path.exists(saveDir):
-    Path(saveDir).mkdir(parents=True, exist_ok=True)
-filename = f'{expName}_fflFreq={str(qb.pars["ffl_freq"]/1e9).replace(".","d")}GHz_DA={qb.pars["rr_atten"]}dB_navg={n_avg}'
-index = get_index_for_filename(saveDir, filename)
-with h5py.File(f'{saveDir}\\{filename}_{index}.h5','w') as hf:
-    now = datetime.now()
-    timestamp = now.strftime("%H:%M:%S")
-    g_on = hf.create_group(f'sweep_ffl_amp_{timestamp}')
-    #dataDict, fig = measure_t1_ffl_off(dt =128,tmax=15e3, n_avg=n_avg)
-    #save_datadict_to_fgroup(g_on, f'ffl amp = off', dataDict)
-    amp_ffl_scale_list = np.array([0.2])
-    for amp_ffl_scale in amp_ffl_scale_list:
-        dataDict, fig = measure_t1_w_ffl(amp_ffl_scale=amp_ffl_scale,dt = 32,tmax=6e3, n_avg=n_avg)
-        save_datadict_to_fgroup(g_on, f'ffl amp = {amp_ffl_scale:.3f}', dataDict)
-        
+def main():
+    device = 'diss08_07A'
+    today = datetime.today()
+    sDate =  today.strftime("%Y%m%d")
+    expName = 'T1wFFL'
+    saveDir = f'G:\\Shared drives\\CavityCooling\data\\{device}\\{sDate}\\{expName}'
+    n_avg = 5000
+    if not os.path.exists(saveDir):
+        Path(saveDir).mkdir(parents=True, exist_ok=True)
+    step_size = 100e6
+    ffl_freq_list = [qb.pars["ffl_freq"] + step_size * n for n in range(-3,3)]
+    for ffl_freq in ffl_freq_list:
+        qb.update_value('ffl_freq', ffl_freq)
+        qb.update_value('ffl_IF', qb.pars['ffl_freq'] - qb.pars['ffl_LO'])
+        filename = f'{expName}_fflFreq={str(qb.pars["ffl_freq"]/1e9).replace(".","d")}GHz_DA={qb.pars["rr_atten"]}dB_navg={n_avg}'
+        index = get_index_for_filename(saveDir, filename)
+        start = timeit.default_timer()   
+        with h5py.File(f'{saveDir}\\{filename}_{index}.h5','w') as hf:
+            now = datetime.now()
+            timestamp = now.strftime("%H:%M:%S")
+            g_on = hf.create_group(f'sweep_ffl_amp_{timestamp}')
+            dataDict, fig = measure_t1_ffl_off(dt=64, tmax=10e3, n_avg=n_avg)
+            save_datadict_to_fgroup(g_on, f'ffl amp = off', dataDict)
+            amp_ffl_scale_list = np.linspace(0, 0.5, 11)
+            for amp_ffl_scale in amp_ffl_scale_list:
+                dataDict, fig = measure_t1_w_ffl(amp_ffl_scale=amp_ffl_scale,dt = 64,tmax=10e3, n_avg=n_avg)
+                save_datadict_to_fgroup(g_on, f'ffl amp = {amp_ffl_scale:.3f}', dataDict)
+        stop = timeit.default_timer()
+        print('Time: ', stop - start)  
+    
+if __name__ == '__main__':
+    main()

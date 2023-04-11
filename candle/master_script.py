@@ -13,12 +13,12 @@ ref_H = - 10
 ref_L = -45
 
 '''Initialize qubit class'''
-qb = qubit('qb5')
+qb = qubit('logical')
 
 '''Update important parameters'''
 qb.update_value('qubit_LO', value = 4.2e9)
 qb.update_value('qubit_IF', value = 50e6)
-qb.update_value('rr_freq', value = 6.65775e9)
+qb.update_value('rr_freq', value = 5.68141e9)
 qb.update_value('rr_IF', 45e6)
 qb.update_value('rr_LO', value = qb.pars['rr_freq'] - qb.pars['rr_IF'])
 

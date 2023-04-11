@@ -522,8 +522,9 @@ class qubit():
             fitted_pars,error = pf.fit_data(amps,np.abs(I+1j*Q),sequence='p-rabi',dt=amps[-1]/len(amps),fitFunc='rabi')
             if plot:
                 pf.plot_data(x_vector=amps, y_vector=np.abs(I+1j*Q),sequence='p-rabi',fitted_pars=fitted_pars,
-                             qubitDriveFreq=self.pars['qubit_LO']+self.pars['qubit_IF'],savefig=False,nAverages=n_avg)
-
+                              qubitDriveFreq=self.pars['qubit_LO']+self.pars['qubit_IF'],savefig=False,nAverages=n_avg)
+                
+                
         '''Update pulse amplitude'''
         A = fitted_pars[1] #self.pars['pi_amp'] * fitted_pars[1]
 
@@ -531,16 +532,16 @@ class qubit():
 
 
     #%%% single_shot
-    def single_shot(self,nIterations=100000,
+    def single_shot(self,
                     n_reps = 1000,
                     liveplot = False,
                     numSamples = 1000):
 
         inst.set_attenuator(attenuation=self.pars['rr_atten'])
 
-        prog = self.make_sequence(exp='ss', nIterations = nIterations, n_reps = n_reps)
+        prog = self.make_sequence(exp='ss', n_reps = n_reps)
 
-        datadict, job = self.get_results(jobtype = prog,result_names=['i', 'I','Q','Iexc','Qexc'], showprogress=False, liveplot = liveplot)
+        datadict, job = self.get_results(jobtype = prog,result_names=['n', 'I','Q','Iexc','Qexc'], showprogress=True, liveplot = liveplot)
 
         if liveplot == False:
             plot, ax = pf.init_IQ_plot()
@@ -610,13 +611,20 @@ class qubit():
                 with for_(n, 0, n < n_avg, n + 1):
                     save(n, n_stream)
                     with for_(*from_array(t,var_arr)):
-                        play("pi" * amp(amp_q_scaling), "qubit", duration=t)
-                        align("qubit", "rr")
-                        measure("readout", "rr", None, *self.res_demod(I, Q))
-                        # save(t,t_stream)
-                        save(I, I_stream)
-                        save(Q, Q_stream)
-                        wait(resettime_clk,"qubit")
+                        with if_(t==0):
+                            measure("readout", "rr", None, *self.res_demod(I, Q))
+                            # save(t,t_stream)
+                            save(I, I_stream)
+                            save(Q, Q_stream)
+                            wait(resettime_clk,"qubit")
+                        with else_():
+                            play("pi" * amp(amp_q_scaling), "qubit", duration=t)
+                            align("qubit", "rr")
+                            measure("readout", "rr", None, *self.res_demod(I, Q))
+                            # save(t,t_stream)
+                            save(I, I_stream)
+                            save(Q, Q_stream)
+                            wait(resettime_clk,"qubit")
 
                 with stream_processing():
                     I_stream.buffer(len(var_arr)).average().save("I")
@@ -661,15 +669,24 @@ class qubit():
                with for_(n, 0, n < n_avg, n + 1):
                    save(n, n_stream)
                    with for_(*from_array(t,var_arr)):
-                        play("pi_half", "qubit")
-                        wait(t, "qubit")
-                        # frame_rotation_2pi(phi, 'qubit')  # this was in Haimeng's code and was commented out by her,
-                        play("pi_half", "qubit")
-                        align("qubit","rr")
-                        measure("readout", "rr", None, *self.res_demod(I, Q))
-                        save(I, I_stream)
-                        save(Q, Q_stream)
-                        wait(resettime_clk, "qubit")
+                        with if_(t==0):
+                            play("pi_half", "qubit")
+                            play("pi_half", "qubit")
+                            align("qubit","rr")
+                            measure("readout", "rr", None, *self.res_demod(I, Q))
+                            save(I, I_stream)
+                            save(Q, Q_stream)
+                            wait(resettime_clk, "qubit")
+                        with else_():
+                            play("pi_half", "qubit")
+                            wait(t, "qubit")
+                            # frame_rotation_2pi(phi, 'qubit')  # this was in Haimeng's code and was commented out by her,
+                            play("pi_half", "qubit")
+                            align("qubit","rr")
+                            measure("readout", "rr", None, *self.res_demod(I, Q))
+                            save(I, I_stream)
+                            save(Q, Q_stream)
+                            wait(resettime_clk, "qubit")
 
                with stream_processing():
                    I_stream.buffer(len(var_arr)).average().save("I")
@@ -719,13 +736,21 @@ class qubit():
                 with for_(n, 0, n < n_avg, n + 1):
                     save(n, n_stream)
                     with for_(*from_array(t,var_arr)):
-                        play("pi", "qubit")
-                        wait(t, 'rr')
-                        align("qubit", "rr")
-                        measure("readout", "rr", None,*self.res_demod(I,Q))
-                        wait(resettime_clk, "qubit")
-                        save(I, I_stream)
-                        save(Q, Q_stream)
+                        with if_(t==0):
+                            play("pi", "qubit")
+                            align("qubit", "rr")
+                            measure("readout", "rr", None,*self.res_demod(I,Q))
+                            wait(resettime_clk, "qubit")
+                            save(I, I_stream)
+                            save(Q, Q_stream)
+                        with else_():
+                            play("pi", "qubit")
+                            wait(t, 'rr')
+                            align("qubit", "rr")
+                            measure("readout", "rr", None,*self.res_demod(I,Q))
+                            wait(resettime_clk, "qubit")
+                            save(I, I_stream)
+                            save(Q, Q_stream)
 
                 with stream_processing():
                     I_stream.buffer(len(var_arr)).average().save("I")
@@ -788,9 +813,9 @@ class qubit():
                     I_stream.buffer(len(var_arr)).average().save("I")
                     Q_stream.buffer(len(var_arr)).average().save("Q")
                     n_stream.save('n')
-
+                    
         elif exp == 'ss':
-
+            resettime_clk = clk(self.pars['qubit_resettime'])
             with program() as prog:
 
                 i,n,I,Iexc,Q,Qexc = self.declare_vars([int,int,fixed,fixed,fixed,fixed])
@@ -830,9 +855,49 @@ class qubit():
                     Q_st_exc.buffer(n_reps).save('Qexc')
                     i_st.save('i')
 
+        
+        elif exp == 'IQblob':
+            resettime_clk= clk(self.pars['qubit_resettime'])
+            with program() as prog:
+
+                n,I,Iexc,Q,Qexc = self.declare_vars([int,fixed,fixed,fixed,fixed])
+                N_st, I_st,Q_st,I_st_exc,Q_st_exc = self.declare_streams(stream_num=5)
+
+                
+                with for_(n, 0, n < n_reps, n + 1):
+                    # do nothing
+                    wait(resettime_clk, "qubit")
+                    align("qubit", "rr")
+                    measure("readout", "rr", None, *self.res_demod(I, Q))
+                    save(I, I_st)
+                    save(Q, Q_st)
+                    
+                    align('qubit','rr')
+                    wait(resettime_clk, "qubit")
+                    align('qubit','rr')
+                    # apply pi-pulse
+                    play("pi", "qubit")
+                    align("qubit", "rr")
+                    measure("readout", "rr", None, *self.res_demod(Iexc, Qexc))
+                    
+                    save(Iexc, I_st_exc)
+                    save(Qexc, Q_st_exc)
+                    save(n,N_st)
+                    
+
+                with stream_processing():
+                    I_st.save_all('I')
+                    Q_st.save_all('Q')
+                    I_st_exc.save_all('Iexc')
+                    Q_st_exc.save_all('Qexc')
+                    N_st.save('n')
+
         return prog
 
     #%%% pulse_exp
+    
+
+    
     def pulse_exp(self,sa = 0,
                       exp='rabi',
                       check_mixers=False,
@@ -1624,10 +1689,10 @@ class qubit():
                 "con2": {
                     "type": "opx1",
                     "analog_outputs": {
-                        1: {"offset": pars['qubit_mixer_offsets'][0]},  # qubit I
-                        2: {"offset": pars['qubit_mixer_offsets'][1]},  # qubit Q
-                        3: {"offset": pars['rr_mixer_offsets'][0]},  # rr I
-                        4: {"offset": pars['rr_mixer_offsets'][1]},  # rr Q
+                        1: {"offset": pars['rr_mixer_offsets'][0]},  # qubit I
+                        2: {"offset": pars['rr_mixer_offsets'][1]},  # qubit Q
+                        3: {"offset": pars['qubit_mixer_offsets'][0]},  # rr I
+                        4: {"offset": pars['qubit_mixer_offsets'][1]},  # rr Q
                         5: {"offset": pars['ffl_mixer_offsets'][0]},  # ffl I
                         6: {"offset": pars['ffl_mixer_offsets'][1]},  # ffl Q
                         7: {"offset": pars['diss_mixer_offsets'][0]},  # diss I

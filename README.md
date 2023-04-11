@@ -4,18 +4,17 @@ This README would normally document whatever steps are necessary to get your app
 
 ### What is this repository for? ###
 
-* Quick summary
-* Version
-* [Learn Markdown](https://bitbucket.org/tutorials/markdowndemo)
+* measurements for the dissipator project
 
-### How do I get set up? ###
+### measurement configuration
 
-* Summary of set up
-* Configuration
-* Dependencies
-* Database configuration
-* How to run tests
-* Deployment instructions
+### list of measurements ###
+
+* dissipator T1
+* logical qubit T2 with and without FFL
+* cavity ring down time sweeping FFL drive amplitude and readout pulse amplitude
+* cavity ring-down time as a function of FFL drive frequency (and with FFL drive frequency deliberately off-calibrated)
+* photon-number resolved spectroscopy
 
 ### Contribution guidelines ###
 
