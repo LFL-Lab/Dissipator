@@ -38,8 +38,8 @@ def optimize_mixer(sa, qb):
     qb.opt_mixer(sa, cal='SB', freq_span = 1e6, reference = ref_L, mode='fine',element = 'ffl')
     
     '''readout mixer'''
-    set_attenuator(0)
-    get_attenuation()
+    inst.set_attenuator(0)
+    inst.get_attenuation()
     rr_lo_leakage = qb.get_power(sa, freq=qb.pars['rr_LO'],reference=ref_H,config=True,plot=True) # reference should be set ABOVE expected image power
     rr_im_leakage = qb.get_power(sa, freq=qb.pars['rr_LO']-qb.pars['rr_IF'],span = 1e6,reference=ref_H,config=True,plot=True) # reference should be set ABOVE expected image power
     rr_on_power = qb.get_power(sa, freq=qb.pars['rr_LO']+qb.pars['rr_IF'],reference=ref_H,config=True,plot=True) # reference should be set ABOVE expected image power
@@ -206,7 +206,7 @@ def save_datadict_to_fgroup(f, name, datadict):
 
 
 #%% doing sweeps
-def sweep_powers(ffl_freq = 6.6e9,rr_atten = 23, n_avg=4000):
+def sweep_powers(ffl_freq = 3.9e9,rr_atten = 23, n_avg=4000):
     qb.update_value('ffl_freq', ffl_freq)
     ffl_scales = np.round(np.linspace(0.0,1.0,20),2)
     # rr_scales = np.round(np.linspace(0.1,1,10), 2)
@@ -245,20 +245,20 @@ def main():
     # save data
     qb.update_value('rr_pulse_len_in_clk',int(500)) # default 500
     qb.update_value('rr_atten', 35) # default = 23
-    device = 'diss08_07A'
+    device = 'diss08_09'
     today = datetime.today()
     sDate =  today.strftime("%Y%m%d")
     saveDir = f'G:\\Shared drives\\CavityCooling\data\\{device}\\{sDate}\\ringdown'
     
     start = timeit.default_timer()   
     # LO_freqs = np.linspace(5.5e9, 7.5e9, 5)
-    for rr_atten in [35]:
+    for rr_atten in [32,34,36,38,40,42,44,46,48,50,52,54,56]:
         # do res spec
         inst.turn_off_ffl_drive()
-        I, Q, freqs, job = qb.resonator_spec(f_LO=qb.pars['rr_LO'],atten=rr_atten,IF_min=30e6,IF_max=60e6,df=0.1e6,n_avg=1000,savedata=True)
+        I, Q, freqs, job = qb.resonator_spec(f_LO=qb.pars['rr_LO'],atten=rr_atten,IF_min=30e6,IF_max=60e6,df=0.1e6,n_avg=2000,savedata=True)
         fc,fwhm = pf.fit_res(freqs,np.abs(I+1j*Q))
         qb.update_value('rr_freq', fc)
-        # dataDict = measure_ringdown_drive_off(amp_r_scale=1, tmax=4e3, dt=16, n_avg=10000)
+        dataDict = measure_ringdown_drive_off(amp_r_scale=1, tmax=8e3, dt=16, n_avg=10000)
         inst.turn_on_ffl_drive()
         step_size = 50e6
         ffl_freq_list = [qb.pars["ffl_freq"] + step_size * n for n in range(-6,6)]
