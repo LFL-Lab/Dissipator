@@ -18,19 +18,9 @@ import plot_functions as pf
 import h5py
 from datetime import datetime
 import os
-
-qb = qubit('logical')
-qb.update_value('ffl_freq', 2.85e9)
-qb.update_value('ffl_LO', 2.8e9)
-qb.update_value('ffl_IF', 0.05e9)
-qb.update_value('amp_ffl', 0.45)
-inst.set_ffl_LO(qb.pars['ffl_LO']) # turn on
-inst.set_rr_LO(qb.pars['rr_LO']) # turn on
-bOptimizeMixer = False
-
 from instrument_init import init_sa, init_sa_by_serial_number
 
-if bOptimizeMixer:
+def optimize_mixer(sa, qb):
     # mixer optimization
     ref_H = 10
     ref_L = -55
@@ -65,7 +55,8 @@ if bOptimizeMixer:
     
     qb.write_pars()
 
-def measure_ringdown_drive_on(amp_r_scale=1, 
+def measure_ringdown_drive_on(qb,
+                              amp_r_scale=1, 
                               amp_ffl_scale=1,
                               tmin = 0,
                               tmax = 2e3,
@@ -133,7 +124,8 @@ def measure_ringdown_drive_on(amp_r_scale=1,
         }
     return dataDict, fig
 
-def measure_ringdown_drive_off(amp_r_scale=1,
+def measure_ringdown_drive_off(qb,
+                               amp_r_scale=1,
                                tmin =  0,
                                tmax= 2e3,
                                dt= 16,
@@ -241,6 +233,15 @@ def sweep_powers(ffl_freq = 6.6e9,rr_atten = 23, n_avg=4000):
                 save_datadict_to_fgroup(g_on, f'ro_scale = {sr}, ffl_scale = {sf}', dataDict)
                 
 def main():
+    
+    qb = qubit('logical')
+    qb.update_value('ffl_freq', 2.85e9)
+    qb.update_value('ffl_LO', 2.8e9)
+    qb.update_value('ffl_IF', 0.05e9)
+    qb.update_value('amp_ffl', 0.45)
+    inst.set_ffl_LO(qb.pars['ffl_LO']) # turn on
+    inst.set_rr_LO(qb.pars['rr_LO']) # turn on
+    bOptimizeMixer = False
     # save data
     qb.update_value('rr_pulse_len_in_clk',int(500)) # default 500
     qb.update_value('rr_atten', 35) # default = 23

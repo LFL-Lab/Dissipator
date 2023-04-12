@@ -74,10 +74,12 @@ class qubit():
                     "analog_input_offsets":         [0,0],
                     "qubit_resettime":              400e3,
                     "rr_resettime":                 20e3,
+                    
                     "ffl_freq":                     6.6e9,
                     "ffl_LO":                       6.55e9,
                     "ffl_IF":                       50e6,
                     "amp_ffl":                      0.45,
+                    "ffl_atten":                    0,
                     "ffl_mixer_offsets":             [0,0],
                     "ffl_mixer_imbalance":           [0,0],
                     }
@@ -116,13 +118,14 @@ class qubit():
 
 #%% EXPERIMENTS
  #%%% play_pulses
-    def play_pulses(self,amp_q=1, amp_ffl=1,amp_diss=1):
+    def play_pulses(self,element='qubit',amp_scale=1):
+        if element == 'qubit' or 'ffl' or 'diss':
+            pulse = "const"
+        elif element =='rr':
+            pulse = "readout"
         with program() as play_pulses:
             with infinite_loop_():
-                play("const"*amp(amp_q), 'qubit',duration=100)
-                play("readout", "rr", duration=100)
-                play("const"*amp(amp_ffl), "ffl", duration=100)
-                play("const"*amp(amp_diss), "diss", duration=100)
+                play(pulse*amp(amp_scale), element,duration=100)
 
         qmm = QuantumMachinesManager(host=host, port=port)
         qm = qmm.open_qm(self.config)
@@ -1427,7 +1430,7 @@ class qubit():
 
         # skips configuring the spectrum analyzer. Used only when optimizing mixer
         if config:
-            self.play_pulses(amp_q=amp_q)
+            # self.play_pulses(amp_scale=amp_q)
             sa_config_level(sa, reference) # sets sensitivity
             sa_config_center_span(sa, freq, span) # sets center frequency
             sa_initiate(sa, SA_SWEEPING, 0)
@@ -1469,7 +1472,7 @@ class qubit():
             argmin (TYPE): DESCRIPTION.
 
         """
-        qm = self.play_pulses(amp_q=amp_q)
+        qm = self.play_pulses(amp_scale=amp_q)
 
         if cal == 'LO':
             freq = self.pars[f'{element}_LO']
@@ -1538,11 +1541,11 @@ class qubit():
             opt_Q = par2_arr[argmin[1]]
             qm.set_output_dc_offset_by_element(element, "I", opt_I)
             qm.set_output_dc_offset_by_element(element, "Q", opt_Q)
-            self.update_value(f'{element}_mixer_offsets',[opt_I,opt_Q])
+            self.update_value(f'{element}_mixer_offsets',[round(opt_I,5), round(opt_Q,5)])
             print(f'optimal I_offset = {round(opt_I*1e3,1)} mV, optimal Q_offset = {round(1e3*opt_Q,1)} mV')
         elif cal == 'SB':
             qm.set_mixer_correction(element,int(self.pars[f'{element}_IF']), int(self.pars[f'{element}_LO']), self.IQ_imbalance(par1_arr[argmin[0]],par2_arr[argmin[1]]))
-            self.update_value(f'{element}_mixer_imbalance',[par1_arr[argmin[0]],par2_arr[argmin[1]]])
+            self.update_value(f'{element}_mixer_imbalance',[round(par1_arr[argmin[0]],5),round(par2_arr[argmin[1]],5)])
             print(f"optimal gain = {round(par1_arr[argmin[0]],4)}, optimal phi = {round(par2_arr[argmin[1]],4)}")
 
         if element == 'rr':
