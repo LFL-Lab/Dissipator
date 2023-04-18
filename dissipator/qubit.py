@@ -30,7 +30,7 @@ import warnings
 host='10.71.0.57'
 port='9510'
 logger.setLevel(level='WARNING')
-device = 'diss08_07A'
+device = 'diss09_5578'
 today = date.today()
 sDate =  today.strftime("%Y%m%d")
 saveDir = f'G:\\Shared drives\\CavityCooling\\data\\{device}\\{sDate}'
@@ -1472,7 +1472,7 @@ class qubit():
             argmin (TYPE): DESCRIPTION.
 
         """
-        qm = self.play_pulses(amp_scale=amp_q)
+        qm = self.play_pulses(element,amp_scale=amp_q)
 
         if cal == 'LO':
             freq = self.pars[f'{element}_LO']

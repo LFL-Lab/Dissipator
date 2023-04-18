@@ -20,11 +20,14 @@ ref_L = -45
 
 '''Initialize qubit class'''
 qb = qubit('diss09')
-
+qb.update_value('rr_LO', 5.5e9)
+qb.update_value('rr_freq', 5.578e9)
+qb.update_value('rr_IF', qb.pars['rr_freq'] - qb.pars['rr_LO'])
 
 '''Update important parameters'''
-qb.update_value('ffl_freq', 1.1e9)
-qb.update_value('ffl_LO', 1e9)
+qb.add_key('diss_freq', 9.5e9)
+qb.update_value('ffl_freq', qb.pars['diss_freq'] - qb.pars['rr_freq'])
+qb.update_value('ffl_LO', 3.87e9)
 qb.update_value('ffl_IF', qb.pars['ffl_freq'] - qb.pars['ffl_LO'])
 qb.update_value('qubit_LO', 2.9e9)
 qb.update_value('qubit_freq', 3.19e9)
@@ -67,10 +70,7 @@ qb.opt_mixer(sa, cal='SB', freq_span = 1e6, mode='fine', reference = ref_L, elem
 
 
 '''FFL mixer calibration'''
-ref_H = 0
-ref_L = -30
-
-qm = qb.play_pulses()
+qm = qb.play_pulses('ffl')
 inst.set_ffl_LO(qb.pars['ffl_LO']) # turn on
 qb_lo_leakage = qb.get_power(sa, freq=qb.pars['ffl_LO'],reference=ref_H,config=True,plot=True)
 qb_im_leakage = qb.get_power(sa, freq=qb.pars['ffl_LO']-qb.pars['ffl_IF'],reference=ref_H,config=True,plot=True)
@@ -79,10 +79,10 @@ qb_on_power = qb.get_power(sa, freq=qb.pars['ffl_LO']+qb.pars['ffl_IF'],referenc
 '''Optimize FFL mixer'''
 qb.opt_mixer(sa, cal='LO', freq_span = 1e6, reference = ref_H, mode='coarse', element = 'ffl')
 qb.opt_mixer(sa, cal='LO', freq_span = 1e6, reference = ref_H, mode='intermediate', element = 'ffl')
-qb.opt_mixer(sa, cal='LO', freq_span = 1e6, reference = ref_L, mode='fine', element = 'ffl')
-qb.opt_mixer(sa, cal='SB', freq_span = 1e6, reference = -40, mode='coarse', element = 'ffl')
+qb.opt_mixer(sa, cal='LO', freq_span = 1e6, reference = -45, mode='fine', element = 'ffl')
+qb.opt_mixer(sa, cal='SB', freq_span = 1e6, reference = ref_H, mode='coarse', element = 'ffl')
 qb.opt_mixer(sa, cal='SB', freq_span = 1e6, reference = ref_L, mode='intermediate', element = 'ffl')
-# qb.opt_mixer(sa, cal='SB', freq_span = 1e6, reference = ref_L, mode='fine',element = 'ffl')
+qb.opt_mixer(sa, cal='SB', freq_span = 1e6, reference = ref_L, mode='fine',element = 'ffl')
 
 
 '''diss mixer calibration'''
@@ -110,7 +110,7 @@ qb.write_pars()
 #            showprogress=True, res_ringdown_time = int(4e3))
 inst.turn_off_ffl_drive()
 inst.set_rr_LO(qb.pars['rr_LO'])
-qb.resonator_spec(f_LO=5.636e9,atten=35,IF_min=30e6,IF_max=60e6,df=0.1e6,n_avg=1000,savedata=True)
+qb.resonator_spec(f_LO=qb.pars['rr_LO'],atten=35,IF_min=63e6,IF_max=93e6,df=0.1e6,n_avg=1000,savedata=True)
 
 #%% qubit spectroscopy
 
@@ -160,25 +160,33 @@ t_arr, I, Q, job, fitted_pars = qb.pulse_exp(exp = 'dissT1', n_avg = 20e6, tmin 
 I,Q,freqs,job = qb.qubit_spec(f_LO=4.4e9,amp_q_scaling=0.9,IF_min=50e3,IF_max=400e6,df=50e3,n_avg=1000,on_off=False,showprogress=True,savedata=False,check_mixers=False,)
 
 #%% cavity ring down
-qb.update_value('rr_atten', 15)
-
+qb.update_value('rr_atten', 18)
+inst.set_attenuator(qb.pars['rr_atten'])
 inst.set_ffl_LO(qb.pars['ffl_LO'])
-inst.turn_on_ffl_drive()
+inst.turn_off_ffl_drive()
 I, Q, freqs, job = qb.resonator_spec(f_LO=qb.pars['rr_LO'],atten=qb.pars['rr_atten'],IF_min=63e6,IF_max=93e6,df=0.1e6,n_avg=1000,savedata=True)
-
 fc,fwhm = pf.fit_res(freqs,np.abs(I+1j*Q))
 qb.update_value('rr_freq', fc)
 inst.set_attenuator(qb.pars['rr_atten'])
 inst.get_attenuation()
 dataDict, fig = measure_ringdown_drive_off(qb, tmax=4e3, dt=32,n_avg=100000)
-inst.set_ffl_LO(qb.pars['ffl_LO']) # turn on
-qb.update_value('ffl_freq', 2.15e9)
-qb.update_value('ffl_LO', 2.1e9)
-qb.update_value('ffl_IF', qb.pars['ffl_freq'] - qb.pars['ffl_LO'])
+
+#%% ring down w. FFL
 inst.set_ffl_LO(qb.pars['ffl_LO'])
-qb.update_value('ffl_atten', 25)
+qb.update_value('ffl_atten',25)
 inst.set_ffl_attenuator(qb.pars['ffl_atten'])
-dataDict, fig = measure_ringdown_drive_on(qb, amp_ffl_scale=0.8,tmax=4e3, dt=32, n_avg=100000)
+
+inst.turn_on_ffl_drive()
+I, Q, freqs, job = qb.resonator_spec(f_LO=qb.pars['rr_LO'],atten=qb.pars['rr_atten'],IF_min=63e6,IF_max=93e6,df=0.1e6,n_avg=1000,savedata=True)
+fc,fwhm = pf.fit_res(freqs,np.abs(I+1j*Q))
+qb.update_value('rr_freq', fc)
+inst.set_attenuator(qb.pars['rr_atten'])
+inst.get_attenuation()
+qb.update_value('ffl_LO', 3.5e9)
+inst.set_ffl_LO(qb.pars['ffl_LO'])
+qb.update_value('ffl_IF', 50e6)
+inst.set_ffl_LO(qb.pars['ffl_LO'])
+dataDict, fig = measure_ringdown_drive_on(qb, amp_ffl_scale=0.9,tmax=1e3, dt=4, n_avg=100000)
 
 #%% qubit reset
 dataDict, fig = measure_t1_ffl_off(amp_r_scale=1,amp_ffl_scale=0.3, tmin = 0, tmax = 15e3, dt = 64, n_avg = 5000,)
