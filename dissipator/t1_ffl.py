@@ -48,7 +48,7 @@ def calibrate_pi_pulse(qb):
     amps, I, Q, job, period = qb.power_rabi(a_min = 0.01, a_max = 2, da = 0.005,  n_avg = 2000,fit = True, plot = True, detuning = 0e6, check_mixers = False)
     qb.update_value('pi_amp', round(qb.pars["pi_amp"] * period/2,3))
     
-    t_arr, I, Q, job, pi2width = qb.pulse_exp(exp='rabi',n_avg = 2000, tmin = 16,tmax = 640, dt = 4, amp_q_scaling = 1, fit = True, plot = True,detuning = 0e6, check_mixers=False)
+    t_arr, I, Q, job, pi2width = qb.pulse_exp(exp='rabi',n_avg = 10000, tmin = 16,tmax = 640, dt = 4, amp_q_scaling = 1, fit = True, plot = True,detuning = 0e6, check_mixers=False)
     qb.update_value('pi_half_len', int(pi2width[1]/4/4)*4)
 
 
@@ -195,19 +195,119 @@ def ffl_punchout(qb):
     qb.update_value('ffl_IF', qb.pars['ffl_freq'] - qb.pars['ffl_LO'])
     inst.set_ffl_LO(qb.pars['ffl_LO'])
     stepsize = 2
-    atten_list = np.arange(30,2,-2)
+    atten_list = np.arange(30,0,-2)
+    amp_list= np.linspace(0,1,15)
     fig = plt.figure()
     ax = fig.add_subplot(111)
     data = []
+    inst.turn_on_ffl_drive()  
     for atten in atten_list:
         inst.set_ffl_attenuator(atten)
-        I, Q, freqs, job = qb.resonator_spec(f_LO=qb.pars['rr_LO'],atten=qb.pars['rr_atten'],IF_min=25e6,IF_max=75e6,df=0.1e6,n_avg=2000,savedata=True)
+        I, Q, freqs, job = resonator_spec_wffl(qb,f_LO=qb.pars['rr_LO'],atten=qb.pars['rr_atten'],IF_min=30e6,IF_max=50e6,amp_ffl_scale=0.2,df=0.1e6,n_avg=2000,savedata=True)
         data.append(np.abs(I + 1j * Q))
-    im = ax.imshow(data, aspect='auto',origin='lower',extent=(freqs[0]/1e9, freqs[-1]/1e9,atten_list[0], atten_list[-1]),
+        
+        
+        
+    im=ax.imshow(data, aspect='auto',origin='lower',extent=(freqs[0]/1e9, freqs[-1]/1e9,atten_list[0], atten_list[-1]),
             interpolation=None, cmap='RdBu')
-    ax.legend()
+    #im=ax.imshow(data, aspect='auto',origin='lower',extent=(freqs[0]/1e9, freqs[-1]/1e9, amp_list[0], amp_list[-1]),
+            #interpolation=None, cmap='RdBu')
+    #ax.legend()
+    fig.colorbar(im)
     plt.show()
-    return data
+    return fig
+
+def resonator_spec_wffl(qb, IF_min = 0.1e6,
+                       f_LO = 7e9,
+                       IF_max = 400e6,
+                       df = 0.1e6,
+                       atten = 10,
+                       n_avg = 500,
+                       amp_ffl_scale=1,
+                       res_ringdown_time = int(4e3),
+                       port_type = 'notch',
+                       fit=True,
+                       savedata=True):
+
+    try:
+        list_of_files = glob.glob(r'D:\weak_measurements\spectroscopy\resonator_spec\*.csv')
+        latest_file = max(list_of_files, key=os.path.getctime)
+        iteration = int(latest_file[-7:-4].lstrip('0')) + 1
+    except:
+        iteration = 1
+
+    freqs = np.arange(IF_min, IF_max + df/2, df, dtype=int)
+    # freqs_list = freqs.tolist()
+    # set attenuation and change rr_LO freq
+    inst.set_attenuator(attenuation=atten)
+
+    qb.update_value('rr_LO', value = f_LO)
+    inst.set_rr_LO(qb.pars['rr_LO'])
+
+    ### QUA code ###
+    with program() as rr_spec:
+
+        n = declare(int)
+        I = declare(fixed)
+        I_st = declare_stream()
+        Q = declare(fixed)
+        Q_st = declare_stream()
+        f = declare(int)
+        n_stream = declare_stream()
+
+        with for_(n, 0, n < n_avg, n + 1):
+
+            # with for_each_(f, freqs_list):
+            with for_(f, IF_min, f < IF_max + df/2, f + df):
+                
+                update_frequency("rr", f)
+                wait(res_ringdown_time, "rr")
+                play('const'*amp(amp_ffl_scale), "ffl", duration=clk(5e3))
+                align("ffl", "rr")
+                measure("readout", "rr", None,*qb.res_demod(I, Q))
+                save(I, I_st)
+                save(Q, Q_st)
+
+            save(n,n_stream)
+
+        with stream_processing():
+            I_st.buffer(len(freqs)).average().save('I')
+            Q_st.buffer(len(freqs)).average().save('Q')
+            n_stream.save('n')
+
+    datadict,job = qb.get_results(rr_spec,result_names=["I","Q","n"],showprogress=False)
+
+    I = np.array(datadict["I"])
+    Q = np.array(datadict["Q"])
+    freq_arr = np.array(freqs + qb.pars['rr_LO'])
+
+    if fit:
+        fc,fwhm = pf.fit_res(freq_arr,np.abs(I+1j*Q))
+        pf.spec_plot(freq_arr,I,Q,attenuation=atten,df=df,iteration=iteration,element='resonator',fwhm=fwhm,fc=fc)
+        print(f'Resonant Frequency: {fc*1e-9:.5f} GHz\nFWHM = {fwhm*1e-6} MHz\nkappa = {2*np.pi*fwhm*1e-6:.3f} MHz')
+
+    exp_dict = {'date/time':    datetime.now(),
+               'nAverages': n_avg,
+                     'w_LO': qb.pars['rr_LO'],
+            'wait_period':  res_ringdown_time,
+            }
+    if savedata:
+        # save data
+        dataPath = f'{saveDir}\spectroscopy\\resonator_spec'
+        if not os.path.exists(dataPath):
+            Path(dataPath).mkdir(parents=True, exist_ok=True)
+        with open(f"{dataPath}\data_{iteration:03d}.csv","w") as datafile:
+            writer = csv.writer(datafile)
+            writer.writerow(exp_dict.keys())
+            writer.writerow(exp_dict.values())
+            writer.writerow(freqs)
+            writer.writerow(I)
+            writer.writerow(Q)
+
+    return I, Q, freqs+qb.pars['rr_LO'], job;
+
+
+
 
 def main():
     
