@@ -24,7 +24,7 @@ def optimize_mixer(sa, qb):
     # mixer optimization
     ref_H = 10
     ref_L = -55
-    qb.play_pulses()
+    qb.play_pulses(element='rr')
     qb_lo_leakage = qb.get_power(sa, freq=qb.pars['ffl_LO'],reference=ref_H,config=True,plot=True)
     qb_im_leakage = qb.get_power(sa, freq=qb.pars['ffl_LO']-qb.pars['ffl_IF'],reference=ref_H,config=True,plot=True)
     qb_on_power = qb.get_power(sa, freq=qb.pars['ffl_LO']+qb.pars['ffl_IF'],reference=ref_H, config=True,plot=True) # reference should be set ABOVE expected image power
