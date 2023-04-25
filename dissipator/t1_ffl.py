@@ -23,20 +23,23 @@ import timeit
 #%% mixer optimization
 def optimize_mixer(sa, qb, element='rr', cal='LO'):
     ref_H = -10
-    ref_L = -60
+    ref_L = -50
     qb.play_pulses(element)
     if element == 'rr':
         inst.set_attenuator(0)
         inst.get_attenuation()
     qb_lo_leakage = qb.get_power(sa, freq=qb.pars[f'{element}_LO'],reference=ref_H,config=True,plot=True)
     qb_im_leakage = qb.get_power(sa, freq=qb.pars[f'{element}_LO']-qb.pars[f'{element}_IF'],reference=ref_H,config=True,plot=True)
-    qb_on_power = qb.get_power(sa, freq=qb.pars[f'{element}_LO']+qb.pars[f'{element}_IF'],reference=ref_H, config=True,plot=True) # reference should be set ABOVE expected image power
+    qb_on_power = qb.get_power(sa, freq=qb.pars[f'{element}_LO']+qb.pars[f'{element}_IF'],reference=ref_H, config=True,plot=True)# reference should be set ABOVE expected image power
     
     '''Optimize FFL mixer'''
     qb.opt_mixer(sa, cal=cal, freq_span = 1e6, reference = ref_H, mode='coarse', element = element)
+    qb.opt_mixer(sa, cal=cal, freq_span = 1e6, reference = ref_H, mode='coarse', element = element)
     qb.opt_mixer(sa, cal=cal, freq_span = 1e6, reference = ref_H, mode='intermediate', element = element)
     qb.opt_mixer(sa, cal=cal, freq_span = 1e6, reference = ref_H, mode='intermediate', element = element)
-    # qb.opt_mixer(sa, cal=cal, freq_span = 1e6, reference = ref_L, mode='fine', element = element)
+    qb.opt_mixer(sa, cal=cal, freq_span = 1e6, reference = ref_L, mode='fine', element = element)
+    qb.opt_mixer(sa, cal=cal, freq_span = 1e6, reference = ref_L, mode='fine', element = element)
+    
     
     qb.write_pars()
 
@@ -67,7 +70,7 @@ def measure_t1_w_ffl(qb,
     dt = clk(dt)
     t_arr = np.arange(tmin, tmax + dt/2, dt, dtype = int)
     inst.turn_on_ffl_drive()
-    resettime_clk= clk(qb.pars['qubit_resettime'])
+    resettime_clk= clk(qb.pars['qubit_resettime']*2)
     with program() as prog:
         update_frequency('qubit', (qb.pars['qubit_freq']-qb.pars['qubit_LO']))
         update_frequency('ffl', (qb.pars['ffl_freq']-qb.pars['ffl_LO'])) 
@@ -190,9 +193,9 @@ def measure_t1_ffl_off(qb,
     return dataDict, fig
 
 def ffl_punchout(qb):
-    qb.update_value('ffl_freq', qb.pars['diss_freq'] - qb.pars['qubit_freq'])
-    qb.update_value('ffl_LO', 3.841e9)
-    qb.update_value('ffl_IF', qb.pars['ffl_freq'] - qb.pars['ffl_LO'])
+    #qb.update_value('ffl_freq', qb.pars['diss_freq'] - qb.pars['qubit_freq'])
+    qb.update_value('ffl_IF', 150e6)
+    qb.update_value('ffl_LO',qb.pars['ffl_freq'] - qb.pars['ffl_IF'])
     inst.set_ffl_LO(qb.pars['ffl_LO'])
     stepsize = 2
     atten_list = np.arange(30,0,-2)
@@ -201,17 +204,17 @@ def ffl_punchout(qb):
     ax = fig.add_subplot(111)
     data = []
     inst.turn_on_ffl_drive()  
-    for atten in atten_list:
-        inst.set_ffl_attenuator(atten)
-        I, Q, freqs, job = resonator_spec_wffl(qb,f_LO=qb.pars['rr_LO'],atten=qb.pars['rr_atten'],IF_min=30e6,IF_max=50e6,amp_ffl_scale=0.2,df=0.1e6,n_avg=2000,savedata=True)
+    for amp in amp_list:
+        inst.set_ffl_attenuator(10)
+        I, Q, freqs, job = resonator_spec_wffl(qb,f_LO=qb.pars['rr_LO'],atten=qb.pars['rr_atten'],IF_min=20e6,IF_max=70e6,amp_ffl_scale=amp,df=0.1e6,n_avg=2000,savedata=True)
         data.append(np.abs(I + 1j * Q))
         
         
         
-    im=ax.imshow(data, aspect='auto',origin='lower',extent=(freqs[0]/1e9, freqs[-1]/1e9,atten_list[0], atten_list[-1]),
-            interpolation=None, cmap='RdBu')
-    #im=ax.imshow(data, aspect='auto',origin='lower',extent=(freqs[0]/1e9, freqs[-1]/1e9, amp_list[0], amp_list[-1]),
+    #im=ax.imshow(data, aspect='auto',origin='lower',extent=(freqs[0]/1e9, freqs[-1]/1e9,atten_list[0], atten_list[-1]),
             #interpolation=None, cmap='RdBu')
+    im=ax.imshow(data, aspect='auto',origin='lower',extent=(freqs[0]/1e9, freqs[-1]/1e9, amp_list[0], amp_list[-1]),
+            interpolation=None, cmap='RdBu')
     #ax.legend()
     fig.colorbar(im)
     plt.show()
@@ -224,7 +227,7 @@ def resonator_spec_wffl(qb, IF_min = 0.1e6,
                        atten = 10,
                        n_avg = 500,
                        amp_ffl_scale=1,
-                       res_ringdown_time = int(4e3),
+                       res_ringdown_time = int(5e3),
                        port_type = 'notch',
                        fit=True,
                        savedata=True):
@@ -240,7 +243,6 @@ def resonator_spec_wffl(qb, IF_min = 0.1e6,
     # freqs_list = freqs.tolist()
     # set attenuation and change rr_LO freq
     inst.set_attenuator(attenuation=atten)
-
     qb.update_value('rr_LO', value = f_LO)
     inst.set_rr_LO(qb.pars['rr_LO'])
 
@@ -254,6 +256,7 @@ def resonator_spec_wffl(qb, IF_min = 0.1e6,
         Q_st = declare_stream()
         f = declare(int)
         n_stream = declare_stream()
+        update_frequency('ffl', (qb.pars['ffl_freq']-qb.pars['ffl_LO'])) 
 
         with for_(n, 0, n < n_avg, n + 1):
 
@@ -262,8 +265,9 @@ def resonator_spec_wffl(qb, IF_min = 0.1e6,
                 
                 update_frequency("rr", f)
                 wait(res_ringdown_time, "rr")
-                play('const'*amp(amp_ffl_scale), "ffl", duration=clk(5e3))
-                align("ffl", "rr")
+                align('rr','ffl')
+                play('const'*amp(amp_ffl_scale), "ffl", duration=clk(4e3))
+                #align("ffl", "rr")
                 measure("readout", "rr", None,*qb.res_demod(I, Q))
                 save(I, I_st)
                 save(Q, Q_st)
@@ -313,7 +317,7 @@ def main():
     
     qb = qubit('diss07a')
 
-    bOptimizeRRMixer = True
+    bOptimizeRRMixer = False
     bOptimizeFFLMixer = True
     bCalibratePi = False
     
@@ -327,10 +331,10 @@ def main():
     
 
     qb.update_value('ffl_freq', qb.pars['diss_freq'] - qb.pars['qubit_freq'])
-    qb.update_value('ffl_IF', 250e6)
+    qb.update_value('ffl_IF', 150e6)
     qb.update_value('ffl_LO', qb.pars['ffl_freq'] -qb.pars['ffl_IF'])
     # qb.update_value('ffl_IF', qb.pars['ffl_freq'] - qb.pars['ffl_LO'])
-    qb.add_key('ffl_atten', 14)
+    qb.add_key('ffl_atten', 20)
   
     inst.set_rr_LO(qb.pars['rr_LO'])
     inst.set_qb_LO(qb.pars['qubit_LO'])
@@ -348,43 +352,47 @@ def main():
         optimize_mixer(sa, qb, element='rr',cal='LO')
         optimize_mixer(sa, qb, element='rr',cal='SB')
         
-    IF_min = 50e6
-    IF_max = 250e6
-    stepsize = 50e6
-    IF_list = [int(qb.pars['ffl_IF'] + stepsize * n) for n in range(-4,3)]
+    # IF_min = 50e6
+    # IF_max = 250e6
+    # stepsize = 50e6
+    # IF_list = [int(qb.pars['ffl_IF'] + stepsize * n) for n in range(-4,3)]
         
     #step_size = 100e6
     #ffl_freq_list = [qb.pars["ffl_freq"] + step_size * n for n in range(-3,3)]
-    # ffl_freq_list= np.linspace(qb.pars['ffl_freq']+200e6,qb.pars['ffl_freq']-300e6,6)
-    ffl_lo_list = [qb.pars['ffl_LO'] -350e6 *n for n in [-1,0,1]]
-    for ffl_lo in ffl_lo_list:
-        qb.update_value('ffl_LO', ffl_lo)
+    ffl_freq_list= qb.pars['ffl_freq']
+    ffl_freq_list = [3.3417e9, 3.4417e9,3.5417e9,3.2417e9,3.1417e9,3.0417e9,2.9417e9,2.8417e9,2.7417e9,2.6417e9]
+    for ffl_freq in ffl_freq_list:
+        qb.update_value('ffl_freq', ffl_freq)
+        qb.update_value('ffl_LO', qb.pars['ffl_freq']-qb.pars['ffl_IF'])
         inst.set_ffl_LO(qb.pars['ffl_LO'])
+        #qb.update_value('ffl_freq', ffl_lo+qb.pars['ffl_IF'])
         if bOptimizeFFLMixer:
             optimize_mixer(sa, qb, element='ffl',cal='LO')
-        for ffl_IF in IF_list:
-            qb.update_value('ffl_IF', ffl_IF)
-            qb.update_value('ffl_freq', ffl_lo + ffl_IF)
+            optimize_mixer(sa, qb, element='ffl',cal='SB')
+        # for ffl_IF in IF_list:
+        #     qb.update_value('ffl_IF', ffl_IF)
+        #     qb.update_value('ffl_freq', ffl_lo + ffl_IF)
    
-            if bOptimizeFFLMixer:
+        #     if bOptimizeFFLMixer:
                 
-                optimize_mixer(sa, qb, element='ffl',cal='SB')
-            # sweep amplitude
-            rrLen = qb.pars['rr_pulse_len_in_clk']
-            filename = f'{expName}_sweepPowers_flux=70uA_fflFreq={(qb.pars["ffl_freq"])/1e9:.2f}GHz_DA={qb.pars["rr_atten"]}dB_fDA={qb.pars["ffl_atten"]}dB_rrLen={rrLen}clks_navg={n_avg}'
-            index = get_index_for_filename(saveDir, filename)
-            with h5py.File(f'{saveDir}\\{filename}_{index}.h5','w') as hf:
-                now = datetime.now()
-                timestamp = now.strftime("%H:%M:%S")
-                g_on = hf.create_group(f'sweep_ffl_amp_{timestamp}')
-                
-                dataDict, fig = measure_t1_ffl_off(qb, dt=64, tmax=10e3, n_avg=n_avg)
-                save_datadict_to_fgroup(g_on, f'ffl amp = off', dataDict)
+        #         optimize_mixer(sa, qb, element='ffl',cal='SB')
+        #     # sweep amplitude
         
-                amp_ffl_scale_list = np.linspace(0., 1, 11)
-                for amp_ffl_scale in amp_ffl_scale_list:
-                    dataDict, fig = measure_t1_w_ffl(qb,amp_ffl_scale=amp_ffl_scale,dt = 32,tmax=5e3, n_avg=n_avg)
-                    save_datadict_to_fgroup(g_on, f'ffl amp = {amp_ffl_scale:.3f}', dataDict)
+        rrLen = qb.pars['rr_pulse_len_in_clk']
+        filename = f'{expName}_sweepPowers_flux=10uA_fflFreq={(qb.pars["ffl_freq"])/1e9:.2f}GHz_DA={qb.pars["rr_atten"]}dB_fDA={qb.pars["ffl_atten"]}dB_rrLen={rrLen}clks_navg={n_avg}'
+        index = get_index_for_filename(saveDir, filename)
+        with h5py.File(f'{saveDir}\\{filename}_{index}.h5','w') as hf:
+            now = datetime.now()
+            timestamp = now.strftime("%H:%M:%S")
+            g_on = hf.create_group(f'sweep_ffl_amp_{timestamp}')
+                
+            dataDict, fig = measure_t1_ffl_off(qb, dt=64, tmax=10e3, n_avg=n_avg)
+            save_datadict_to_fgroup(g_on, f'ffl amp = off', dataDict)
+        
+            amp_ffl_scale_list = np.linspace(0., 0.99, 7)
+            for amp_ffl_scale in amp_ffl_scale_list:
+                dataDict, fig = measure_t1_w_ffl(qb,amp_ffl_scale=amp_ffl_scale,dt = 8,tmax=4e3, n_avg=n_avg)
+                save_datadict_to_fgroup(g_on, f'ffl amp = {amp_ffl_scale:.3f}', dataDict)
     sa_close_device(sa)
     stop = timeit.default_timer()
     print('Time: ', stop - start)  

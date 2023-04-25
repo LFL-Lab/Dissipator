@@ -16,30 +16,33 @@ from ringdown_ffl import measure_ringdown_drive_off, measure_ringdown_drive_on
 from t1_ffl import measure_t1_ffl_off, measure_t1_w_ffl
 from g_e_f_T1 import measure_leakage_w_ffl
 ref_H = -10
-ref_L = -30
+ref_L = -50
 '''Initialize qubit class'''
 qb = qubit('diss07a')
 
 
 '''Update important parameters'''
-qb.update_value('rr_freq', qb.pars['rr_freq'])
+qb.update_value('rr_freq', 5.6792e9)
 qb.update_value('rr_LO', qb.pars['rr_LO'])
 qb.update_value('rr_IF', qb.pars['rr_freq'] -qb.pars['rr_LO'] )
 qb.update_value('rr_atten', 32)
-qb.update_value('diss_freq', qb.pars['diss_freq'])
+qb.update_value('diss_freq', 7.97e9)
 qb.update_value('qubit_freq', 4.6383e9)
-qb.update_value('qubit_LO', 4.59e9)
-qb.update_value('qubit_IF', qb.pars['qubit_freq'] - qb.pars['qubit_LO'])
-qb.update_value('ffl_freq', qb.pars['diss_freq'] - qb.pars['qubit_freq'])
-qb.update_value('ffl_LO', 3.841e9)
-qb.update_value('ffl_IF', qb.pars['ffl_freq'] - qb.pars['ffl_LO'])
+qb.update_value('qubit_IF',150e6 )
+qb.update_value('qubit_LO', qb.pars['qubit_freq'] - qb.pars['qubit_IF'])
+#qb.update_value('ffl_freq', qb.pars['diss_freq'] - qb.pars['qubit_freq'])
+qb.update_value('ffl_freq', qb.pars['diss_freq'] - qb.pars['rr_freq'])
+qb.update_value('ffl_IF', 150e6)
+qb.update_value('ffl_LO',qb.pars['ffl_freq'] - qb.pars['ffl_IF'])
+
 
 
 inst.set_rr_LO(qb.pars['rr_LO'])
 '''Qubit mixer calibration 
 Get leakage power '''
-qm = qb.play_pulses(element='qubit',amp_scale=1)
 inst.set_qb_LO(qb.pars['qubit_LO'])
+qm = qb.play_pulses(element='qubit',amp_scale=1)
+
 
 qb_lo_leakage = qb.get_power(sa, freq=qb.pars['qubit_LO'],reference=ref_H,config=True,plot=True)
 qb_im_leakage = qb.get_power(sa, freq=qb.pars['qubit_LO']-qb.pars['qubit_IF'],reference=ref_H,config=True,plot=True)
@@ -56,7 +59,7 @@ qb.opt_mixer(sa, cal='SB', freq_span = 1e6, reference = ref_L, amp_q=1,mode='fin
 '''Readout mixer calibration'''
 # set DA to 0 dB attenuation
 inst.set_rr_LO(qb.pars['rr_LO'])
-qm = qb.play_pulses(element='rr')
+qm = qb.play_pulses(element='rr',amp_scale=1)
 set_attenuator(0)
 get_attenuation()
 rr_lo_leakage = qb.get_power(sa, freq=qb.pars['rr_LO'],reference=ref_H,config=True,plot=True) # reference should be set ABOVE expected image power
@@ -73,12 +76,12 @@ qb.opt_mixer(sa, cal='SB', freq_span = 1e6, mode='fine', amp_q=1,reference = ref
 
 
 '''FFL mixer calibration'''
-ref_H = -10
+ref_H = 10
 #ref_L = -30
-ref_L = -45
-
+ref_L = -50
+inst.set_ffl_LO(qb.pars['ffl_LO'])
 qm = qb.play_pulses(element='ffl')
-inst.set_ffl_LO(qb.pars['ffl_LO']) # turn on
+ # turn on
 
 qb_lo_leakage = qb.get_power(sa, freq=qb.pars['ffl_LO'],reference=ref_H,config=True,plot=True)
 qb_im_leakage = qb.get_power(sa, freq=qb.pars['ffl_LO']-qb.pars['ffl_IF'],reference=ref_H,config=True,plot=True)
@@ -88,9 +91,9 @@ qb_on_power = qb.get_power(sa, freq=qb.pars['ffl_LO']+qb.pars['ffl_IF'],referenc
 qb.opt_mixer(sa, cal='LO', freq_span = 1e6, reference = ref_H,amp_q=1, mode='coarse', element = 'ffl')
 qb.opt_mixer(sa, cal='LO', freq_span = 1e6, reference = ref_H,amp_q=1, mode='intermediate', element = 'ffl')
 qb.opt_mixer(sa, cal='LO', freq_span = 1e6, reference = ref_L,amp_q=1, mode='fine', element = 'ffl')
-qb.opt_mixer(sa, cal='SB', freq_span = 1e6, reference = ref_H,amp_q=0.6, mode='coarse', element = 'ffl')
-qb.opt_mixer(sa, cal='SB', freq_span = 1e6, reference = ref_H,amp_q=0.5, mode='intermediate', element = 'ffl')
-qb.opt_mixer(sa, cal='SB', freq_span = 1e6, reference = ref_L,amp_q=0.5, mode='fine',element = 'ffl')
+qb.opt_mixer(sa, cal='SB', freq_span = 1e6, reference = ref_H,amp_q=1, mode='coarse', element = 'ffl')
+qb.opt_mixer(sa, cal='SB', freq_span = 1e6, reference = ref_H,amp_q=1, mode='intermediate', element = 'ffl')
+qb.opt_mixer(sa, cal='SB', freq_span = 1e6, reference = ref_L,amp_q=1, mode='fine',element = 'ffl')
 
 
 '''diss mixer calibration'''
@@ -116,23 +119,23 @@ qb.write_pars()
 
 # I,Q,freqs,job = qb.run_scan(df = 25e3, n_avg = 250, element='resonator', chunksize = 90e6, attenuation=35, lo_min = 5.636e9, lo_max = 5.636e9,
 #            showprogress=True, res_ringdown_time = int(4e3))
-inst.turn_off_ffl_drive()
-I, Q, freqs, job = qb.resonator_spec(f_LO=qb.pars['rr_LO'],atten=qb.pars['rr_atten'],IF_min=25e6,IF_max=75e6,df=0.1e6,n_avg=2000,savedata=True)
+inst.turn_on_ffl_drive()
+I, Q, freqs, job = qb.resonator_spec(f_LO=qb.pars['rr_LO'],atten=32,IF_min=20e6,IF_max=70e6,df=0.1e6,n_avg=2000,savedata=True)
+
 
 #%% punchout
-I, Q, freq_arr, job = qb.punchout(IF_min=73e6,IF_max=83e6,df=0.1e6, atten_range=[24,50], atten_step=2, n_avg=2000)
+I, Q, freq_arr, job = qb.punchout(IF_min=20e6,IF_max=70e6,df=0.1e6, atten_range=[0,50], atten_step=2, n_avg=2000)
 #%% qubit spectroscopy
 
 I,Q,freqs,job = qb.run_scan(df = 100e3, n_avg = 2000, element='qubit', chunksize = 350e6,  lo_min = 2.5e9, lo_max = 5.5e9, amp_q_scaling = 0.9, saturation_dur = 20e3, showprogress=True, res_ringdown_time = int(4e3), check_mixers=False)
 
-I,Q,freqs,job = qb.qubit_spec(f_LO=4.59e9,amp_q_scaling=1,amp_r_scaling=1,IF_min=35e6,IF_max=70e6,df=20e3,n_avg=2000,on_off=True,showprogress=True,savedata=False,check_mixers=False,)
+I,Q,freqs,job = qb.qubit_spec(sa=sa,f_LO=4.59e9,amp_q_scaling=1,amp_r_scaling=1,IF_min=40e6,IF_max=54e6,df=5e3,n_avg=2000,rr_freq=5.6792e9,atten=32,on_off=True,showprogress=True,savedata=False,check_mixers=False,)
 
 #%% Rabi
 
 qb.update_value('pi_amp', 0.4)
 qb.update_value('pi_len', 64)
-amps, I, Q, job, period = qb.power_rabi(a_min = 0.01, a_max = 1.0, da = 0.005,  n_avg = 5000,
-                                        fit = True, plot = True, detuning = 0e6, check_mixers = False)
+amps, I, Q, job, period = qb.power_rabi(a_min = 0.01, a_max = 2.0, da = 0.005,  n_avg = 5000,fit = True, plot = True, detuning = 0e6, check_mixers = False)
 
 
 t_arr, I, Q, job, pi2width = qb.pulse_exp(exp='rabi',n_avg = 10000, tmin = 0,tmax = 400, dt = 4, amp_q_scaling = 1, fit = True, plot = True,
@@ -188,11 +191,11 @@ inst.set_ffl_attenuator(qb.pars['ffl_atten'])
 dataDict, fig = measure_ringdown_drive_on(qb, amp_ffl_scale=0.8,tmax=4e3, dt=32, n_avg=100000)
 
 #%% qubit reset
-dataDict, fig = measure_t1_ffl_off(amp_r_scale=1,amp_ffl_scale=0.3, tmin = 0, tmax = 15e3, dt = 64, n_avg = 10000,)
+dataDict, fig = measure_t1_ffl_off(qb, amp_r_scale=1,amp_ffl_scale=0.3, tmin = 0, tmax = 15e3, dt = 64, n_avg = 10000,)
 # qb.update_value('ffl_freq', 3.8918e9)
 #qb.update_value('ffl_freq', 3.9918e9)
 
 
-dataDict, fig = measure_t1_w_ffl(amp_r_scale=1,amp_ffl_scale=0.55, tmin = 0, tmax = 2e3, dt = 8, n_avg = 10000,)
-dataDict, fig = measure_leakage_w_ffl(amp_r_scale=1,amp_ffl_scale=0.55, tmin = 0, tmax = 64e3, dt = 256, n_avg = 10000,)
+dataDict, fig = measure_t1_w_ffl(qb,amp_r_scale=1,amp_ffl_scale=0.4, tmin = 0, tmax = 3e3, dt = 16, n_avg = 10000,)
+dataDict, fig = measure_leakage_w_ffl(amp_r_scale=1,amp_ffl_scale=0.4, tmin = 0, tmax = 6e3, dt = 64, n_avg = 10000,)
 # state prep

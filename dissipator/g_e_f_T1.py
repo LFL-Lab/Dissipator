@@ -114,7 +114,7 @@ def measure_leakage_w_ffl(amp_r_scale=1,
     dt = clk(dt)
     t_arr = np.arange(tmin, tmax + dt/2, dt, dtype = int)
     inst.turn_on_ffl_drive()
-    resettime_clk= clk(qb.pars['qubit_resettime'])
+    resettime_clk= clk(qb.pars['qubit_resettime']*2)
     with program() as prog:
         update_frequency('qubit', (qb.pars['qubit_freq']-qb.pars['qubit_LO']))
         update_frequency('ffl', (qb.pars['ffl_freq']-qb.pars['ffl_LO'])) 
@@ -126,20 +126,16 @@ def measure_leakage_w_ffl(amp_r_scale=1,
             save(n, n_stream)
             with for_(*from_array(t,t_arr)):
                 with if_(t==0):
-                    play("pi", "qubit")
-                    align("ffl", "qubit")
-                    play('const'*amp(amp_ffl_scale), "ffl", duration=1e3)
-                    align("ffl", "rr")
+                    #play('const'*amp(amp_ffl_scale), "ffl", duration=1e3)
+                    #align("ffl", "rr")
                     measure("readout", "rr", None, *qb.res_demod(I, Q))
                     wait(resettime_clk, "rr")
                     save(I, I_stream)
                     save(Q, Q_stream)
                 with else_():
-                    play("pi", "qubit")
-                    align("ffl", "qubit")
-                    play('const'*amp(amp_ffl_scale), "ffl", duration=1e3)
+                    play('const'*amp(amp_ffl_scale), "ffl", duration=t)
                     align("ffl", "rr")
-                    wait(t, "rr")
+                    #wait(t, "rr")
                     measure("readout", "rr", None, *qb.res_demod(I, Q))
                     wait(resettime_clk, "rr")
                     save(I, I_stream)
