@@ -224,7 +224,8 @@ class qubit():
                  amp_q_scaling = 1,
                  saturation_dur = 20e3,
                  showprogress=False, 
-                 res_ringdown_time = 4e3):
+                 res_ringdown_time = 4e3,
+                 plot=True):
         """
         Scans a broad range of frequencies in search for qubits/resonators
 
@@ -242,18 +243,18 @@ class qubit():
             TYPE: DESCRIPTION.
 
         """
-
-        try:
-            list_of_files = glob.glob(r'D:\weak_measurements\spectroscopy\{element}_spec\*.csv')
-            latest_file = max(list_of_files, key=os.path.getctime)
-            iteration = int(latest_file[-7:-4].lstrip('0')) + 1
-        except:
-            iteration = 1
+        today = datetime.today()
+        sDate =  today.strftime("%Y%m%d")
+        saveDir = f'G:\\Shared drives\\CavityCooling\data\\{self.device_name}\\{sDate}'
+        
+        dataPath = f'{saveDir}\\spectroscopy\\{element}_spec'
+        filename = 'data'
+        iteration = get_index_for_filename(dataPath, filename, file_format='csv')
 
         freq_arr = []
         I = []
         Q = []
-
+        reports = ''
         if lo_min != lo_max:
             numchunks = int((lo_max-lo_min)/chunksize) + 1
             lo_list = [i*chunksize+lo_min for i in range(numchunks)]
@@ -270,17 +271,29 @@ class qubit():
                                                         check_mixers=check_mixers,
                                                         saturation_dur=saturation_dur,
                                                         atten=attenuation,IF_min=df,IF_max=chunksize,df=df,n_avg=n_avg,showprogress=showprogress,savedata=True)
+            elif element == 'ffl':
+                dataI, dataQ,freqs, job = self.ffl_spec(f_LO=f, 
+                                                        IF_min=df,IF_max=chunksize,df=df,
+                                                        n_avg=n_avg, 
+                                                        amp_ffl_scale=amp_q_scaling, 
+                                                        check_mixers= check_mixers,
+                                                        savedata=False)
+                
             freq_arr.extend(freqs)
             I.extend(dataI)
             Q.extend(dataQ)
-
+            reports += str(job.execution_report()) + '\n'
+            
+        
         exp_dict = {'date/time':    datetime.now(),
                    'nAverages': n_avg,
                          'w_LO': self.pars['rr_LO'],
                          'attenuation': attenuation,
                 'wait_period':  self.pars['rr_resettime'],
+                'report': reports
                 }
-
+        if plot:
+            pf.spec_plot(np.array(freq_arr),np.array(I),np.array(Q),attenuation=self.pars['ffl_atten'],df=df,iteration=iteration,element='ffl')
         # save data
         dataPath = '{saveDir}\spectroscopy\{element}_spec'
         if not os.path.exists(dataPath):

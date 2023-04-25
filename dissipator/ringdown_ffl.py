@@ -12,7 +12,7 @@ Created on Thu Mar  2 18:14:15 2023
 @author: lfl
 """
 import timeit
-from qubit import *
+from dissipator import *
 import instrument_init as inst
 import plot_functions as pf
 import h5py
@@ -31,10 +31,11 @@ def optimize_mixer(sa, qb, element='rr', cal='LO'):
     qb_im_leakage = qb.get_power(sa, freq=qb.pars[f'{element}_LO']-qb.pars[f'{element}_IF'],reference=ref_H,config=True,plot=True)
     qb_on_power = qb.get_power(sa, freq=qb.pars[f'{element}_LO']+qb.pars[f'{element}_IF'],reference=ref_H, config=True,plot=True) # reference should be set ABOVE expected image power
     
-    '''Optimize FFL mixer'''
-    qb.opt_mixer(sa, cal=cal, freq_span = 1e6, reference = ref_H, mode='coarse', element = element)
-    qb.opt_mixer(sa, cal=cal, freq_span = 1e6, reference = ref_H, mode='intermediate', element = element)
-    qb.opt_mixer(sa, cal=cal, freq_span = 1e6, reference = ref_H, mode='intermediate', element = element)
+    if qb_lo_leakage > -75: 
+        qb.opt_mixer(sa, cal=cal, freq_span = 1e6, reference = ref_H, mode='coarse', element = element)
+    if qb_im_leakage > -75:
+        qb.opt_mixer(sa, cal=cal, freq_span = 1e6, reference = ref_H, mode='intermediate', element = element)
+        qb.opt_mixer(sa, cal=cal, freq_span = 1e6, reference = ref_H, mode='intermediate', element = element)
     # qb.opt_mixer(sa, cal=cal, freq_span = 1e6, reference = ref_L, mode='fine', element = element)
     
     qb.write_pars()
@@ -95,12 +96,18 @@ def measure_ringdown_drive_on(qb,
     fitted_pars, error = pf.fit_data(t_arr,ydata,sequence='ringdown',dt=t_arr[-1]*1e-6/len(t_arr))
     fig = pf.plot_data(t_arr,ydata,sequence='ringdown_drive=ON',fitted_pars=fitted_pars,nAverages=n_avg, 
                  qubitDriveFreq=qb.pars['ffl_freq'],qb_power = -8,iteration=1)
-    dataDict = {'metadata': {'amp_r_scale': amp_r_scale,
+    dataDict = {'metadata': {'ffl_freq': qb.pars['ffl_freq'],
+                             'ffl_atten': qb.pars['ffl_atten'],
+                             'ffl_LO': qb.pars['ffl_LO'],
+                             'ffl_IF': qb.pars['ffl_IF'],
+                            'amp_r_scale': amp_r_scale,
                              'amp_ffl_scale': amp_ffl_scale,
                              'tmin': 16,
                              'tmax': 2e3,
                              'dt': 16,
-                             'n_avg': 1000,},
+                             'n_avg': 1000,
+                             'report': str(job.execution_report()),
+                             },
                 'time': t_arr,
                 'I': I,
                 'Q': Q,
@@ -167,7 +174,8 @@ def measure_ringdown_drive_off(qb,
                              'tmin': 16,
                              'tmax': 2e3,
                              'dt': 16,
-                             'n_avg': 1000,},
+                             'n_avg': 1000,
+                             'report': str(job.execution_report())},
                 'time': t_arr,
                 'I': I,
                 'Q': Q,
@@ -185,9 +193,10 @@ def save_datadict_to_fgroup(f, name, datadict):
     for key in datadict['metadata'].keys():
         subgroup.attrs[key] = datadict['metadata'][key]
     print(f'write dataset to {name}')
+
     
 #%% ffl punchout
-def ffl_punchout():
+def ffl_punchout(qb):
     qb.update_value('ffl_freq', qb.pars['diss_freq'] - qb.pars['rr_freq'])
     qb.update_value('ffl_LO', 3.87e9)
     qb.update_value('ffl_IF', qb.pars['ffl_freq'] - qb.pars['ffl_LO'])
@@ -210,53 +219,64 @@ def ffl_punchout():
 
 
 #%% doing sweeps
-def sweep_powers(qb,ffl_freq = 6.6e9,rr_atten = 23, n_avg=4000):
+def sweep_powers(qb, 
+                 element='ffl', 
+                 n_avg=4000, 
+                 check_mixers=False,
+                 amp_r_scale=1, 
+                 amp_ffl_scale=1,
+                 bcheckDriveOff = False):
     rr_atten = qb.pars['rr_atten']
     rrLen = qb.pars['rr_pulse_len_in_clk']
-    ffl_scales = [round(0.0 + 0.1* n,1) for n in range(10)]
-   
-    if not os.path.exists(saveDir):
-        Path(saveDir).mkdir(parents=True, exist_ok=True)
-    filename = f'ringdown_sweepPowers_flux=70uA_fflFreq={(ffl_freq)/1e9:.2f}GHz_DA={rr_atten}dB_fDA={qb.pars["ffl_atten"]}dB_rrLen={rrLen}clks_navg={n_avg}'
-    index = get_index_for_filename(saveDir, filename)
-    with h5py.File(f'{saveDir}\\{filename}_{index}.h5','w') as hf:
-        now = datetime.now()
-        timestamp = now.strftime("%H:%M:%S")
-        g_on = hf.create_group(f'sweep_ffl_amp_{timestamp}')
-        
-        dataDict, fig = measure_ringdown_drive_off(qb,tmax=2e3, dt=16, n_avg=n_avg)
-        save_datadict_to_fgroup(g_on, f' ffl_off', dataDict)
-      
-        for j,sf in enumerate(ffl_scales):
-            dataDict, fig = measure_ringdown_drive_on(qb,amp_ffl_scale=sf, n_avg=n_avg, dt = 16, tmax=2e3)
-            save_datadict_to_fgroup(g_on, f'ffl_scale = {sf}', dataDict)
-                
-def main():
-    qb = qubit('diss09')
-    qb.update_value('diss_freq', 9.5e9)
-    qb.update_value('ffl_freq', qb.pars['diss_freq'] - qb.pars['rr_freq'])
-    
-    qb.update_value('ffl_IF', 250e6)
-    qb.update_value('ffl_LO', qb.pars['ffl_freq'] - qb.pars['ffl_IF'])
-    qb.update_value('amp_ffl', 0.45)
-    qb.update_value('ffl_atten', 30)
-    inst.set_ffl_attenuator(qb.pars['ffl_atten'])
-    inst.set_rr_LO(qb.pars['rr_LO']) # turn on
-    inst.set_ffl_LO(qb.pars['ffl_LO'])
-    # sweep parameters
-    IF_min = 50e6
-    IF_max = 250e6
-    stepsize = 50e6
-    # IF_list = [int(qb.pars['ffl_IF'] + stepsize * n) for n in range(-4,3)]
-    IF_list = [qb.pars['ffl_IF']]
-    bOptimizeFFLMixer = True
-    bOptimizeRRMixer = True
+    if element == 'rr':
+        var_scales = [round(0.0 + 0.1* n,1) for n in range(1,11)]
+    elif element == 'ffl':
+        var_scales = [round(0.0 + 0.1* n,1) for n in range(10)]
+        var_scales.reverse()
+    if check_mixers:
+        sa = inst.init_sa()
+        qb.play_pulses(element='ffl')
+        qb.optimize_mixer(sa,element='ffl',cal='LO')
+        qb.optimize_mixer(sa, element='ffl',cal='SB')
+        mixer_data = qb.mixer_powers(sa, element='ffl')
+        sa_close_device(sa)
     # save data
-    device = 'diss09'
+    device = 'diss09_5578'
     today = datetime.today()
     sDate =  today.strftime("%Y%m%d")
     saveDir = f'G:\\Shared drives\\CavityCooling\data\\{device}\\{sDate}\\ringdown'
     
+    if not os.path.exists(saveDir):
+        Path(saveDir).mkdir(parents=True, exist_ok=True)
+    filename = f'ringdown_sweep{element}Powers_flux=70uA_fflFreq={(qb.pars["ffl_freq"])/1e9:.2f}GHz_DA={rr_atten}dB_fDA={qb.pars["ffl_atten"]}dB_rrLen={rrLen}clks_amp_r_scale={amp_r_scale}=navg={n_avg}'
+    index = get_index_for_filename(saveDir, filename)
+    with h5py.File(f'{saveDir}\\{filename}_{index}.h5','w') as hf:
+        now = datetime.now()
+        timestamp = now.strftime("%H:%M:%S")
+        g_on = hf.create_group(f'sweep_{element}_amp_{timestamp}')
+        
+        if bcheckDriveOff:
+            dataDict, fig = measure_ringdown_drive_off(qb,tmax=0.5e3, dt=8, n_avg=n_avg, amp_r_scale = amp_r_scale)
+            save_datadict_to_fgroup(g_on, f' ffl_off', dataDict)
+      
+        for j,value in enumerate(var_scales):
+            if element == 'rr':
+                
+                dataDict, fig = measure_ringdown_drive_on(qb,amp_ffl_scale=amp_ffl_scale, n_avg=avg_list[j], dt = 8, tmax=0.8e3,amp_r_scale=value)
+            elif element =='ffl':
+                dataDict, fig = measure_ringdown_drive_on(qb,amp_ffl_scale=value, n_avg=n_avg, dt = 16, tmax=1e3,amp_r_scale=amp_r_scale)
+            save_datadict_to_fgroup(g_on, f'{element}_scale = {value}', dataDict)
+        
+        # meta data for mixer calibration
+        
+        
+def main():
+    qb = dissipator('diss09', device_name='diss09_5578')
+    qb.update_value('diss_freq', 9.5e9) 
+    # qb.update_value('ffl_freq', qb.pars['diss_freq'] - qb.pars['rr_freq'])
+    
+    bOptimizeFFLMixer = True
+    bOptimizeRRMixer = True
     start = timeit.default_timer() 
     # readout mixer optimization
     sa = inst.init_sa()
@@ -266,38 +286,52 @@ def main():
         optimize_mixer(sa, qb, element='rr',cal='LO')
         optimize_mixer(sa, qb, element='rr',cal='SB')
         # sa_close_device(sa)
-
-    # do res spec
-    inst.turn_off_ffl_drive()
-    I, Q, freqs, job = qb.resonator_spec(f_LO=qb.pars['rr_LO'],atten=qb.pars['rr_atten'],IF_min=63e6,IF_max=93e6,df=0.1e6,n_avg=1000,savedata=True)
-    fc,fwhm = pf.fit_res(freqs,np.abs(I+1j*Q))
-    qb.update_value('rr_freq', fc)
+    stepsize = 50e6
+    freqs_list = [3.02e9 + n * stepsize for n in range(-2,2)]
+    for freq in freqs_list:
+        qb.update_value('ffl_freq', freq)
+        qb.update_value('ffl_IF', 350e6)
+        qb.update_value('ffl_LO', qb.pars['ffl_freq'] - qb.pars['ffl_IF'])
+        qb.update_value('amp_ffl', 0.45)
+        qb.update_value('ffl_atten', 30)
+        inst.set_ffl_attenuator(qb.pars['ffl_atten'])
+        inst.set_rr_LO(qb.pars['rr_LO']) # turn on
+        inst.set_ffl_LO(qb.pars['ffl_LO'])
+        n_avg = 150000
+        # sweep parameters
+        IF_min = 50e6
+        IF_max = 250e6
+        stepsize = 50e6
+        # IF_list = [int(qb.pars['ffl_IF'] + stepsize * n) for n in range(-4,3)]
+        IF_list = [qb.pars['ffl_IF']]
     
-    # change the following line to sweep LO frequencies
-    lo_list = [qb.pars['ffl_LO'] - 350e6 * n for n in [0]]
-    for ffl_lo in lo_list:
-        inst.set_ffl_LO(ffl_lo)
-
-        if bOptimizeFFLMixer:
-            # sa = inst.init_sa()
-            qb.play_pulses(element='ffl')
-            optimize_mixer(sa, qb, element='ffl',cal='LO')
-            optimize_mixer(sa, qb, element='ffl',cal='SB')
-            # sa_close_device(sa)
-       
+        # do res spec
+        inst.turn_off_ffl_drive()
         I, Q, freqs, job = qb.resonator_spec(f_LO=qb.pars['rr_LO'],atten=qb.pars['rr_atten'],IF_min=63e6,IF_max=93e6,df=0.1e6,n_avg=1000,savedata=True)
         fc,fwhm = pf.fit_res(freqs,np.abs(I+1j*Q))
         qb.update_value('rr_freq', fc)
-        for ffl_IF in IF_list:
-            qb.update_value('ffl_IF', ffl_IF)
-            qb.update_value('ffl_freq', ffl_lo + ffl_IF)
+        
+        # change the following line to sweep LO frequencies
+        # lo_list = [qb.pars['ffl_LO'] - 350e6 * n for n in [-2,-1,1,2]]
+        lo_list = [qb.pars['ffl_LO']]
+        for ffl_lo in lo_list:
+            inst.set_ffl_LO(ffl_lo)
+    
             if bOptimizeFFLMixer:
-                # ffl mixer calibration
-                qb.play_pulses('ffl')
+                # sa = inst.init_sa()
+                qb.play_pulses(element='ffl')
+                optimize_mixer(sa, qb, element='ffl',cal='LO')
                 optimize_mixer(sa, qb, element='ffl',cal='SB')
                 # sa_close_device(sa)
-            sweep_powers(qb,ffl_freq = qb.pars['ffl_freq'],rr_atten = qb.pars['rr_atten'],n_avg=100000)
-    stop = timeit.default_timer()
+           
+            I, Q, freqs, job = qb.resonator_spec(f_LO=qb.pars['rr_LO'],atten=qb.pars['rr_atten'],IF_min=63e6,IF_max=93e6,df=0.1e6,n_avg=1000,savedata=True)
+            fc,fwhm = pf.fit_res(freqs,np.abs(I+1j*Q))
+            qb.update_value('rr_freq', fc)
+            for ffl_IF in IF_list:
+                qb.update_value('ffl_IF', ffl_IF)
+                qb.update_value('ffl_freq', ffl_lo + ffl_IF)
+                sweep_powers(qb,element='rr', n_avg=n_avg, amp_ffl_scale=0.8)
+        stop = timeit.default_timer()
     sa_close_device(sa)
     print('Time: ', stop - start)  
 

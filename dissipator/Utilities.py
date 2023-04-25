@@ -56,11 +56,11 @@ def save_datadict_to_fgroup(f, name, datadict):
         subgroup.attrs[key] = datadict['metadata'][key]
     print(f'write dataset to {name}')
     
-def get_index_for_filename(saveDir, filename,format='h5'):
+def get_index_for_filename(saveDir, filename,file_format='h5'):
     try:
-        list_of_files = glob.glob(f'{saveDir}\\{filename}*.{format}')
+        list_of_files = glob.glob(f'{saveDir}\\{filename}*.{file_format}')
         latest_file = max(list_of_files, key=os.path.getctime)
-        iteration = int(latest_file.split('.')[0].split('_')[-1]) + 1
+        iteration = int(latest_file.split('.')[-2].split('_')[-1]) + 1
     except:
         iteration = 1
     return iteration

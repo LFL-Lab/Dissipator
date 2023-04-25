@@ -108,7 +108,7 @@ def spec_plot(freq,I,Q,attenuation=-30,df=0.1e6,plot='mag',element='resonator',f
         ax1.set_xlabel('Frequency (GHz)')
         ax1.set_ylabel('Magnitude (mV)')
 
-    elif element == 'resonator':
+    elif element == 'resonator' or 'ffl':
         # Power data
         ax1 = fig.add_subplot(211)
         ax1.plot(freq,mag,'-o', markersize = 3, c='C0')
@@ -128,6 +128,9 @@ def spec_plot(freq,I,Q,attenuation=-30,df=0.1e6,plot='mag',element='resonator',f
             txt = '$\omega_{01}$ = %.4f GHz\n$P_{qb}$ = %.1f dBm\n$P_r$ = %.1f dBm\n$\omega_r$ = %.4f GHz'%(freq[peaks[0]], qb_power, rr_power, rrFreq*1e-9)
         else:
             txt = '$P_{qb}$ = %.1f dBm\n$P_r$ = %.1f dBm\n$\omega_r$ = %.4f GHz'%(qb_power,rr_power,rrFreq*1e-9)
+    
+    elif element =='ffl':
+        txt = f'$\omega_c$ = FFL attenuation: {attenuation} dB\ndf = {df*1e-3} kHz'
     plt.gcf().text(1, 0.15, txt, fontsize=14)
     # fig.set_title(f'{element} spectroscopy {iteration}')
     plt.tight_layout()
