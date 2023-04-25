@@ -108,7 +108,7 @@ def spec_plot(freq,I,Q,attenuation=-30,df=0.1e6,plot='mag',element='resonator',f
         ax1.set_xlabel('Frequency (GHz)')
         ax1.set_ylabel('Magnitude (mV)')
 
-    elif element == 'resonator':
+    elif element == 'resonator' or 'ffl':
         # Power data
         ax1 = fig.add_subplot(211)
         ax1.plot(freq,mag,'-o', markersize = 3, c='C0')
@@ -128,6 +128,9 @@ def spec_plot(freq,I,Q,attenuation=-30,df=0.1e6,plot='mag',element='resonator',f
             txt = '$\omega_{01}$ = %.4f GHz\n$P_{qb}$ = %.1f dBm\n$P_r$ = %.1f dBm\n$\omega_r$ = %.4f GHz'%(freq[peaks[0]], qb_power, rr_power, rrFreq*1e-9)
         else:
             txt = '$P_{qb}$ = %.1f dBm\n$P_r$ = %.1f dBm\n$\omega_r$ = %.4f GHz'%(qb_power,rr_power,rrFreq*1e-9)
+    
+    elif element =='ffl':
+        txt = f'$\omega_c$ = FFL attenuation: {attenuation} dB\ndf = {df*1e-3} kHz'
     plt.gcf().text(1, 0.15, txt, fontsize=14)
     # fig.set_title(f'{element} spectroscopy {iteration}')
     plt.tight_layout()
@@ -375,7 +378,7 @@ def fit_data(x_vector,y_vector,sequence='rabi',dt=0.01,fitFunc='',verbose=0):
 
 #%% plot_data
 def plot_data(x_vector,y_vector,sequence='rabi',qubitDriveFreq=3.8e9,qb_power=1,
-                              pi2Width='',nAverages=1,
+                              pi2Width=32,nAverages=1,
                               integration_length=2e-6,cav_resp_time=5e-6,stepSize=5e-6, iteration = 1,
                               Tmax=5e-6,measPeriod=5e-6,active_reset=False,
                               fitted_pars=np.zeros(7),plot_mode=0,rr_IF=5e6,fitFunc='',savefig=True):
@@ -433,6 +436,18 @@ def plot_data(x_vector,y_vector,sequence='rabi',qubitDriveFreq=3.8e9,qb_power=1,
         ax.set_title('Echo Measurement %03d' %(iteration))
 
 
+   
+
+    elif 'ringdown' in sequence:
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
+        ax.plot(x_vector, y_vector, '-o', markersize = 3, c='C0')
+        ax.set_ylabel('Digitizer Voltage (mV)')
+        ax.set_xlabel('Delay ($\mu$s)')
+        ax.plot(x_vector,decay(x_vector, fitted_pars[0], fitted_pars[1], fitted_pars[2]),'r')
+        textstr = '$\omega_d$ = %.4f GHz\n$T_{ringdown}$ = %.4f $\mu$s\n$\hat{n}$ = %d'%(qubitDriveFreq*1e-9,fitted_pars[1],nAverages)
+        ax.set_title('resonator ring down %03d' %(iteration))
+        
     elif sequence == "T1" or "dissT1":
         fig = plt.figure()
         ax = fig.add_subplot(111)
@@ -442,17 +457,7 @@ def plot_data(x_vector,y_vector,sequence='rabi',qubitDriveFreq=3.8e9,qb_power=1,
         ax.plot(x_vector,decay(x_vector, fitted_pars[0], fitted_pars[1], fitted_pars[2]),'r')
         textstr = '$T_{\pi/2}$=%.1f ns\n$\omega_d$ = %.4f GHz\n$T_1$ = %.3f $\mu$s\n$\hat{n}$ = %d'%(pi2Width,qubitDriveFreq*1e-9,fitted_pars[1],nAverages)
         ax.set_title('T1 Measurement %03d' %(iteration))
-
-    elif  'ringdown' in sequence:
-       
-        fig = plt.figure()
-        ax = fig.add_subplot(111)
-        ax.plot(x_vector, y_vector, '-o', markersize = 3, c='C0')
-        ax.set_ylabel('Digitizer Voltage (mV)')
-        ax.set_xlabel('Delay ($\mu$s)')
-        ax.plot(x_vector,decay(x_vector, fitted_pars[0], fitted_pars[1], fitted_pars[2]),'r')
-        textstr = '$T_{\pi/2}$=%.1f ns\n$\omega_d$ = %.4f GHz\n$T_{ringdown}$ = %.1f $\mu$s\n$\hat{n}$ = %d'%(pi2Width,qubitDriveFreq*1e-9,fitted_pars[1],nAverages)
-        ax.set_title('resonator ring down %03d' %(iteration))
+        
     plt.gcf().text(0.95, 0.15, textstr, fontsize=14)
 
     plt.tick_params(axis='both',direction='in',bottom=True, top=True, left=True, right=True,size=8)

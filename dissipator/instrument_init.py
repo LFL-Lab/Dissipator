@@ -26,8 +26,7 @@ qubit_LO_quantity_name = {'freq':'RF1 frequency',
 rr_LO_model = 'SignalCore SC5511A Signal Generator'
 rr_LO_name = '10002A06'
 rr_LO_quantity_name = {'freq': 'Frequency',
-                       'power': 'Power',
-                       'output':'Output status'}
+                       'output':'Output'}
 
 ffl_LO_model = 'SignalCore SC5511A Signal Generator'
 ffl_LO_name = '10002F1D'
@@ -79,7 +78,7 @@ def set_rr_LO(freq):
     rrLO = client.connectToInstrument(rr_LO_model, dict(name=rr_LO_name, startup = 'Get config'))
     rrLO.startInstrument()
     rrLO.setValue('Frequency', freq)
-    rrLO.setValue(rr_LO_quantity_name['power'], 15)
+    # rrLO.setValue(rr_LO_quantity_name['power'], 15)
     rrLO.setValue(rr_LO_quantity_name['output'],True)
 
 def get_rr_LO():
@@ -157,7 +156,18 @@ def get_ffl_attenuation():
     attn.startInstrument()
     return attn.getValue('Attenuation')
 
-
+def turn_on_twpa_pump():
+    pLO = client.connectToInstrument(twpa_LO_model, dict(name=twpa_LO_name, startup = 'Get config'))
+    pLO.startInstrument()
+    pLO.setValue('Frequency', 7.97114e9)
+    pLO.setValue(twpa_LO_quantity_name['power'], 11.5)
+    pLO.setValue(twpa_LO_quantity_name['output'],True)
+    
+def turn_off_twpa_pump():
+    pLO = client.connectToInstrument(twpa_LO_model, dict(name=twpa_LO_name, startup = 'Get config'))
+    pLO.startInstrument()
+    pLO.setValue(twpa_LO_quantity_name['output'],False)
+    
 def init_sa():
     sa = sa_open_device()["handle"]
     sa_config_acquisition(device = sa, detector = SA_AVERAGE, scale = SA_LOG_SCALE)

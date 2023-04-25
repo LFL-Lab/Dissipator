@@ -170,12 +170,11 @@ t_arr, I, Q, job, fitted_pars = qb.pulse_exp(exp = 'dissT1', n_avg = 20e6, tmin 
 I,Q,freqs,job = qb.qubit_spec(f_LO=4.4e9,amp_q_scaling=0.9,IF_min=50e3,IF_max=400e6,df=50e3,n_avg=1000,on_off=False,showprogress=True,savedata=False,check_mixers=False,)
 
 #%% cavity ring down
-qb.update_value('rr_atten', 15)
-
+qb.update_value('rr_atten', 18)
+inst.set_attenuator(qb.pars['rr_atten'])
 inst.set_ffl_LO(qb.pars['ffl_LO'])
-inst.turn_on_ffl_drive()
+inst.turn_off_ffl_drive()
 I, Q, freqs, job = qb.resonator_spec(f_LO=qb.pars['rr_LO'],atten=qb.pars['rr_atten'],IF_min=63e6,IF_max=93e6,df=0.1e6,n_avg=1000,savedata=True)
-
 fc,fwhm = pf.fit_res(freqs,np.abs(I+1j*Q))
 qb.update_value('rr_freq', fc)
 inst.set_attenuator(qb.pars['rr_atten'])
@@ -186,9 +185,20 @@ qb.update_value('ffl_freq', 2.15e9+50e6)
 qb.update_value('ffl_LO', 2.1e9)
 qb.update_value('ffl_IF', qb.pars['ffl_freq'] - qb.pars['ffl_LO'])
 inst.set_ffl_LO(qb.pars['ffl_LO'])
-qb.update_value('ffl_atten', 25)
+qb.update_value('ffl_atten',25)
 inst.set_ffl_attenuator(qb.pars['ffl_atten'])
-dataDict, fig = measure_ringdown_drive_on(qb, amp_ffl_scale=0.8,tmax=4e3, dt=32, n_avg=100000)
+
+inst.turn_on_ffl_drive()
+I, Q, freqs, job = qb.resonator_spec(f_LO=qb.pars['rr_LO'],atten=qb.pars['rr_atten'],IF_min=63e6,IF_max=93e6,df=0.1e6,n_avg=1000,savedata=True)
+fc,fwhm = pf.fit_res(freqs,np.abs(I+1j*Q))
+qb.update_value('rr_freq', fc)
+inst.set_attenuator(qb.pars['rr_atten'])
+inst.get_attenuation()
+qb.update_value('ffl_LO', 3.5e9)
+inst.set_ffl_LO(qb.pars['ffl_LO'])
+qb.update_value('ffl_IF', 50e6)
+inst.set_ffl_LO(qb.pars['ffl_LO'])
+dataDict, fig = measure_ringdown_drive_on(qb, amp_ffl_scale=0.9,tmax=1e3, dt=4, n_avg=100000)
 
 #%% qubit reset
 dataDict, fig = measure_t1_ffl_off(qb, amp_r_scale=1,amp_ffl_scale=0.3, tmin = 0, tmax = 15e3, dt = 64, n_avg = 10000,)
