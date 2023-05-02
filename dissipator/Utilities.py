@@ -12,6 +12,7 @@ from tqdm import tqdm
 import numpy as np
 import glob
 import os
+import pandas as pd
 #%% make_progress_meter
 # display progress bar and send slack notification
 def make_progress_meter(n_handle, n_total):
@@ -49,11 +50,12 @@ def round_from_uncertainty(num, unc, scale = 1):
 
 def save_datadict_to_fgroup(f, name, datadict):
     subgroup = f.create_group(name)
-    dset_i = subgroup.create_dataset('I', data=datadict['I'])
-    dset_q = subgroup.create_dataset('Q', data=datadict['Q'])
-    dset_t = subgroup.create_dataset('t', data=datadict['time'])
-    for key in datadict['metadata'].keys():
-        subgroup.attrs[key] = datadict['metadata'][key]
+    for key in datadict.keys():
+        if key != 'metadata':
+            dset_q = subgroup.create_dataset(key, data=datadict[key])
+   
+        else:
+            subgroup.attrs[key] = datadict['metadata'][key]
     print(f'write dataset to {name}')
     
 def get_index_for_filename(saveDir, filename,file_format='h5'):
@@ -64,3 +66,6 @@ def get_index_for_filename(saveDir, filename,file_format='h5'):
     except:
         iteration = 1
     return iteration
+
+
+# def save_datadict_to_csv(f, name, datadict)

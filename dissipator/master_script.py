@@ -54,8 +54,8 @@ qb.opt_mixer(sa, cal='SB', freq_span = 1e6, reference = ref_L, mode='fine',eleme
 # set DA to 0 dB attenuation
 inst.set_rr_LO(qb.pars['rr_LO'])
 qm = qb.play_pulses(element='rr')
-set_attenuator(0)
-get_attenuation()
+inst.set_attenuator(0)
+inst.get_attenuation()
 rr_lo_leakage = qb.get_power(sa, freq=qb.pars['rr_LO'],reference=ref_H,config=True,plot=True) # reference should be set ABOVE expected image power
 rr_im_leakage = qb.get_power(sa, freq=qb.pars['rr_LO']-qb.pars['rr_IF'],span = 1e6,reference=ref_H,config=True,plot=True) # reference should be set ABOVE expected image power
 rr_on_power = qb.get_power(sa, freq=qb.pars['rr_LO']+qb.pars['rr_IF'],reference=ref_H,config=True,plot=True) # reference should be set ABOVE expected image power
@@ -110,7 +110,8 @@ qb.write_pars()
 #            showprogress=True, res_ringdown_time = int(4e3))
 inst.turn_off_ffl_drive()
 inst.set_rr_LO(qb.pars['rr_LO'])
-qb.resonator_spec(f_LO=qb.pars['rr_LO'],atten=35,IF_min=63e6,IF_max=93e6,df=0.1e6,n_avg=1000,savedata=True)
+qb.set_attenuator(18)
+qb.resonator_spec(f_LO=qb.pars['rr_LO'],atten=0,IF_min=63e6,IF_max=93e6,df=0.1e6,n_avg=2000,savedata=True)
 
 #%% qubit spectroscopy
 

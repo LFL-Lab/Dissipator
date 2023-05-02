@@ -8,6 +8,7 @@ from qm import generate_qua_script
 from qm.qua import *
 from qm import LoopbackInterface
 from qm.QuantumMachinesManager import QuantumMachinesManager
+from qm import SimulationConfig
 import plot_functions as pf
 import os
 from datetime import datetime
@@ -118,16 +119,22 @@ class qubit():
 
 #%% EXPERIMENTS
  #%%% play_pulses
-    def play_pulses(self,element='qubit',amp_scale=1):
+    def play_pulses(self,element='qubit',amp_scale=1, simulate=False):
         if element == 'qubit' or 'ffl' or 'diss':
             pulse = "const"
         elif element =='rr':
             pulse = "readout"
         with program() as play_pulses:
             with infinite_loop_():
-                play(pulse*amp(amp_scale), element,duration=100)
+                play('const'*amp(amp_scale), 'ffl',duration=100)
+                play('readout'*amp(amp_scale), 'rr',duration=100)
+            
 
         qmm = QuantumMachinesManager(host=host, port=port)
+        if simulate:
+            job = qmm.simulate(self.config, play_pulses, SimulationConfig(duration=200))
+            samples = job.get_simulated_samples()
+            samples.con2.plot(analog_ports=['1','2'])
         qm = qmm.open_qm(self.config)
         job = qm.execute(play_pulses)
 
@@ -176,9 +183,9 @@ class qubit():
             print(f'Measuring resonator at {fc*1e-9} GHz')
             f_LO = fc - span/2
             j = 0
-            for a in attenuation_range:
+            for a in tqdm(attenuation_range):
                 print(f'Attenuation = {a} dB')
-                dataI,dataQ,freqs,job = self.resonator_spec(f_LO=f_LO,atten=a,IF_min=df,IF_max=span,df=df,n_avg=n_avg,res_ringdown_time=res_ringdown_time,savedata=False,fit=False)
+                dataI,dataQ,freqs,job = self.resonator_spec(f_LO=f_LO,atten=a,IF_min=df,IF_max=span,df=df,n_avg=int(n_avg*np.exp(a/10)),res_ringdown_time=res_ringdown_time,savedata=False,fit=False)
                 freq_arr[:,i] = freqs
                 I[j,:,i] = dataI
                 Q[j,:,i] = dataQ
@@ -191,7 +198,7 @@ class qubit():
 
         exp_dict = {'date/time':    datetime.now(),
                    'nAverages': n_avg,
-                         'w_LO': pars['rr_LO'],
+                         'w_LO': self.pars['rr_LO'],
                          'attenuation': attenuation_range,
                 'wait_period':  res_ringdown_time,
                 }
@@ -279,6 +286,14 @@ class qubit():
                                                         check_mixers= check_mixers,
                                                         savedata=False)
                 
+            elif element == 'diss':
+                dataI, dataQ,freqs, job = self.diss_spec(f_LO=f, 
+                                                        IF_min=df,IF_max=chunksize,df=df,
+                                                        n_avg=n_avg, 
+                                                        amp_ffl_scale=amp_q_scaling, 
+                                                        check_mixers= check_mixers,
+                                                        savedata=False)
+                
             freq_arr.extend(freqs)
             I.extend(dataI)
             Q.extend(dataQ)
@@ -293,7 +308,8 @@ class qubit():
                 'report': reports
                 }
         if plot:
-            pf.spec_plot(np.array(freq_arr),np.array(I),np.array(Q),attenuation=self.pars['ffl_atten'],df=df,iteration=iteration,element='ffl')
+            fig = pf.spec_plot(np.array(freq_arr),np.array(I),np.array(Q),attenuation=self.pars['ffl_atten'],df=df,iteration=iteration,element='ffl', lo_list=lo_list)
+          
         # save data
         dataPath = '{saveDir}\spectroscopy\{element}_spec'
         if not os.path.exists(dataPath):

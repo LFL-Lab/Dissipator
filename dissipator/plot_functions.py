@@ -65,7 +65,7 @@ def tof_plot(adc1,adc2):
     plt.show()
 
 #%% spec_plot
-def spec_plot(freq,I,Q,attenuation=-30,df=0.1e6,plot='mag',element='resonator',fwhm=0,fc=0,qb_power=0,rr_power=0,rrFreq=0,iteration=1,find_peaks=False):
+def spec_plot(freq,I,Q,attenuation=-30,df=0.1e6,plot='mag',element='resonator',fwhm=0,fc=0,qb_power=0,rr_power=0,rrFreq=0,iteration=1,find_peaks=False, **kwargs):
 
     freq = freq*1e-9
     I = I*1e3
@@ -86,7 +86,6 @@ def spec_plot(freq,I,Q,attenuation=-30,df=0.1e6,plot='mag',element='resonator',f
     fig = plt.figure(figsize=(8,8))
 
     if element == 'qubit':
-
         # I data
         ax1 = fig.add_subplot(221)
         ax1.plot(freq,I,'-o', markersize = 3, c='C0')
@@ -118,6 +117,13 @@ def spec_plot(freq,I,Q,attenuation=-30,df=0.1e6,plot='mag',element='resonator',f
         ax2.plot(freq,phase,'-o', markersize = 3, c='C0')
         ax2.set_xlabel('Frequency (GHz)')
         ax2.set_ylabel('Phase (deg)')
+        if 'lo_list' in kwargs.keys():
+            lo_list = kwargs.get('lo_list')
+            axes = fig.axes
+            for ax in axes: 
+                ymin, ymax = ax.get_ylim()
+                for lo in lo_list:
+                    ax.vlines(x = lo/1e9,ymin=ymin, ymax=ymax, ls='--')
 
     if element == 'resonator':
         txt = f'$\omega_c$ = {fc*1e-9:.5f} GHz\nFWHM = {fwhm*1e-6:.3f} MHz\n$\kappa$ = {2*np.pi*fwhm*1e-6:.3f} MHz\nReadout attenuation: {attenuation} dB\ndf = {df*1e-3} kHz'
@@ -130,11 +136,16 @@ def spec_plot(freq,I,Q,attenuation=-30,df=0.1e6,plot='mag',element='resonator',f
             txt = '$P_{qb}$ = %.1f dBm\n$P_r$ = %.1f dBm\n$\omega_r$ = %.4f GHz'%(qb_power,rr_power,rrFreq*1e-9)
     
     elif element =='ffl':
-        txt = f'$\omega_c$ = FFL attenuation: {attenuation} dB\ndf = {df*1e-3} kHz'
+        if 'current' in kwargs:
+            current = round(kwargs.get('current')*1e6)
+        else:
+            current = 'N/A'
+        txt = f'$\omega_c$ = flux: {current}$ \mu$A\nFFL attenuation: {attenuation} dB\ndf = {df*1e-3} kHz'
     plt.gcf().text(1, 0.15, txt, fontsize=14)
     # fig.set_title(f'{element} spectroscopy {iteration}')
     plt.tight_layout()
     plt.show()
+    return fig
 
 #%% init_IQ_plot
 def init_IQ_plot():
@@ -149,7 +160,7 @@ def init_IQ_plot():
 
 #%% heatmap_plot
 def heatplot(xdata, ydata, data, xlabel = "", ylabel = "", normalize=False, cbar_label = 'log mag', **kwargs):
-    fig,ax = plt.figure(figsize=(4,3), dpi=300)
+    fig,ax = plt.subplots(1,1,figsize=(4,3), dpi=300)
     if normalize:
         cbar_label += ' (normalized)'
 
