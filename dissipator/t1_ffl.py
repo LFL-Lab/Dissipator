@@ -192,7 +192,7 @@ def measure_t1_ffl_off(qb,
         }
     return dataDict, fig
 
-def ffl_punchout(qb):
+def ffl_punchout_amp_sweep(qb):
     #qb.update_value('ffl_freq', qb.pars['diss_freq'] - qb.pars['qubit_freq'])
     qb.update_value('ffl_IF', 150e6)
     qb.update_value('ffl_LO',qb.pars['ffl_freq'] - qb.pars['ffl_IF'])
@@ -205,7 +205,7 @@ def ffl_punchout(qb):
     data = []
     inst.turn_on_ffl_drive()  
     for amp in amp_list:
-        inst.set_ffl_attenuator(10)
+        inst.set_ffl_attenuator(16)
         I, Q, freqs, job = resonator_spec_wffl(qb,f_LO=qb.pars['rr_LO'],atten=qb.pars['rr_atten'],IF_min=20e6,IF_max=70e6,amp_ffl_scale=amp,df=0.1e6,n_avg=2000,savedata=True)
         data.append(np.abs(I + 1j * Q))
         
@@ -216,6 +216,40 @@ def ffl_punchout(qb):
     im=ax.imshow(data, aspect='auto',origin='lower',extent=(freqs[0]/1e9, freqs[-1]/1e9, amp_list[0], amp_list[-1]),
             interpolation=None, cmap='RdBu')
     #ax.legend()
+    fig.colorbar(im)
+    plt.show()
+    return fig
+
+def ffl_punchout(qb, sweep_mode='atten', ffl_on=True, stepsize = 2) :
+    #qb.update_value('ffl_freq', qb.pars['diss_freq'] - qb.pars['qubit_freq'])
+    # qb.update_value('ffl_IF', 350e6)
+    # qb.update_value('ffl_LO',qb.pars['ffl_freq'] - qb.pars['ffl_IF'])
+    inst.set_ffl_LO(qb.pars['ffl_LO'])
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
+    data = []
+    inst.turn_on_ffl_drive()  
+    if sweep_mode == 'atten':
+        atten_list = np.arange(30,0,-stepsize)
+        for atten in atten_list:
+            inst.set_ffl_attenuator(atten)
+            if ffl_on:
+                I, Q, freqs, job = resonator_spec_wffl(qb,f_LO=qb.pars['rr_LO'],atten=qb.pars['rr_atten'],IF_min=20e6,IF_max=70e6,amp_ffl_scale=0.,df=0.1e6,n_avg=2000,savedata=True)
+            else:
+                I, Q, freqs, job = qb.resonator_spec(f_LO=qb.pars['rr_LO'],atten=qb.pars['rr_atten'],IF_min=20e6,IF_max=70e6,df=0.1e6,n_avg=2000,savedata=True)
+            data.append(np.abs(I + 1j * Q))
+        im=ax.imshow(data, aspect='auto',origin='lower',extent=(freqs[0]/1e9, freqs[-1]/1e9,atten_list[0], atten_list[-1]),
+                    interpolation=None, cmap='RdBu')
+    elif sweep_mode =='amp'        :
+        amp_list= np.linspace(0,1,10)
+        for amp in amp_list:
+            inst.set_ffl_attenuator(9)
+            I, Q, freqs, job = resonator_spec_wffl(qb,f_LO=qb.pars['rr_LO'],atten=qb.pars['rr_atten'],IF_min=35e6,IF_max=55e6,amp_ffl_scale=amp,df=0.1e6,n_avg=5000,savedata=True)
+            data.append(np.abs(I + 1j * Q))
+        im=ax.imshow(data, aspect='auto',origin='lower',extent=(freqs[0]/1e9, freqs[-1]/1e9,amp_list[0], amp_list[-1]),
+                interpolation=None, cmap='RdBu')
+    
+    ax.set_title(f'FFL f_d={round(qb.pars["ffl_freq"]/1e9,5)}GHz')
     fig.colorbar(im)
     plt.show()
     return fig

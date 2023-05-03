@@ -26,7 +26,7 @@ qubit_LO_quantity_name = {'freq':'RF1 frequency',
 rr_LO_model = 'SignalCore SC5511A Signal Generator'
 rr_LO_name = '10002A06'
 rr_LO_quantity_name = {'freq': 'Frequency',
-                       'output':'Output'}
+                       'output':'Output status'}
 
 ffl_LO_model = 'SignalCore SC5511A Signal Generator'
 ffl_LO_name = '10002F1D'

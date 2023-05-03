@@ -31,8 +31,9 @@ qb.update_value('qubit_freq', 4.6383e9)
 qb.update_value('qubit_IF',150e6 )
 qb.update_value('qubit_LO', qb.pars['qubit_freq'] - qb.pars['qubit_IF'])
 #qb.update_value('ffl_freq', qb.pars['diss_freq'] - qb.pars['qubit_freq'])
-qb.update_value('ffl_freq', qb.pars['diss_freq'] - qb.pars['rr_freq'])
-qb.update_value('ffl_IF', 150e6)
+#qb.update_value('ffl_freq', qb.pars['diss_freq'] - qb.pars['rr_freq'])
+qb.update_value('ffl_freq', 2.14e9)
+qb.update_value('ffl_IF', 350e6)
 qb.update_value('ffl_LO',qb.pars['ffl_freq'] - qb.pars['ffl_IF'])
 
 
@@ -80,7 +81,7 @@ ref_H = 10
 #ref_L = -30
 ref_L = -50
 inst.set_ffl_LO(qb.pars['ffl_LO'])
-qm = qb.play_pulses(element='ffl')
+qm = qb.play_pulses(element='ffl',amp_scale=1)
  # turn on
 
 qb_lo_leakage = qb.get_power(sa, freq=qb.pars['ffl_LO'],reference=ref_H,config=True,plot=True)
@@ -200,12 +201,17 @@ qb.update_value('ffl_IF', 50e6)
 inst.set_ffl_LO(qb.pars['ffl_LO'])
 dataDict, fig = measure_ringdown_drive_on(qb, amp_ffl_scale=0.9,tmax=1e3, dt=4, n_avg=100000)
 
+
+dataDict, fig=measure_ringdown_drive_on(qb, amp_r_scale=1, amp_ffl_scale=0.01,tmax = 1e3,dt = 8,n_avg = 50000,)
+dataDict, fig=measure_ringdown_drive_off(qb, amp_r_scale=1 ,tmax = 1e3,dt = 8,n_avg = 100000,)
+
 #%% qubit reset
 dataDict, fig = measure_t1_ffl_off(qb, amp_r_scale=1,amp_ffl_scale=0.3, tmin = 0, tmax = 15e3, dt = 64, n_avg = 10000,)
 # qb.update_value('ffl_freq', 3.8918e9)
 #qb.update_value('ffl_freq', 3.9918e9)
 
 
-dataDict, fig = measure_t1_w_ffl(qb,amp_r_scale=1,amp_ffl_scale=0.4, tmin = 0, tmax = 3e3, dt = 16, n_avg = 10000,)
+dataDict, fig = measure_t1_w_ffl(qb,amp_r_scale=1,amp_ffl_scale=0.6, tmin = 0, tmax = 3e3, dt = 16, n_avg = 10000,)
 dataDict, fig = measure_leakage_w_ffl(amp_r_scale=1,amp_ffl_scale=0.4, tmin = 0, tmax = 6e3, dt = 64, n_avg = 10000,)
-# state prep
+
+
