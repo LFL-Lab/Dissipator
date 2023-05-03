@@ -13,7 +13,8 @@ sys.path.append("D:\Program Files\Keysight\Labber\Script")
 sys.path.append(r"C:\Users\lfl\measurements_test")
 import Labber
 import json
-
+import numpy as np
+import time
 client = Labber.connectToServer()
 # qmm = QuantumMachinesManager()
 # qm = qmm.open_qm(config)
@@ -34,14 +35,37 @@ ffl_LO_quantity_name = {'freq': 'Frequency',
                         'power': 'Power',
                        'output':'Output status'}
 
-diss_LO_model = 'SignalCore SC5511A Signal Generator'
-diss_LO_name = '10002F25'
-diss_LO_quantity_name = {'freq': 'Frequency',
-                        'power': 'Power',
-                        'output':'Output status'}
+diss_LO_model = 'SignalCore SC5506A Signal Generator'
+diss_LO_name = '10002A08' 
+diss_LO_quantity_name = {'freq':'RF2 frequency',
+                          'power': 'RF2 power level',
+                          'output': 'RF2 output status'}
 
+flux_source_meter_model = 'Keithley 2400 SourceMeter'
+source_meter_name = 'Victoria'
 
-
+source_meter_quantity_name = {'current': 'Source current',
+                              'rate': 'Source current - Sweep rate',
+                              'output': 'Output on'}
+def get_flux_bias():
+    csource = client.connectToInstrument(flux_source_meter_model, dict(name=source_meter_name, startup = 'Get config'))
+    csource.startInstrument()
+    current = csource.getValue(source_meter_quantity_name['current'])
+    print(f'flux bias = {round(current * 1e3, 4)} mA')
+    return current
+    
+def set_flux_bias(current, step = 0.5e-6):
+    print(f'Setting flux bias to {round(current*1e3, 4)} mA')
+    csource = client.connectToInstrument(flux_source_meter_model, dict(name=source_meter_name, startup = 'Get config'))
+    csource.startInstrument()
+    start_current = csource.getValue(source_meter_quantity_name['current'])
+    if current <= start_current:
+        step = -step
+    current_list = np.round(np.arange(start_current, current + step/2, step),7)
+    for value in current_list[1:]:
+        csource.setValue(source_meter_quantity_name['current'], value)
+        time.sleep(0.5)
+    
 def set_qb_LO(freq):
     print(f'Setting qubit LO to {round(freq*1e-9,5)} GHz')
     # initialize qubit LO
@@ -93,8 +117,9 @@ def get_ffl_LO():
     fLO.startInstrument()
     return fLO.getValue(ffl_LO_quantity_name['freq'])
 
-def set_ffl_LO(freq):
-    print(f'Setting ffl LO to {round(freq*1e-9,5)} GHz')
+def set_ffl_LO(freq, bprint=True):
+    if bprint:
+        print(f'Setting ffl LO to {round(freq*1e-9,5)} GHz')
     # initialize ffl LO
     fLO = client.connectToInstrument(ffl_LO_model, dict(name=ffl_LO_name, startup = 'Get config'))
     fLO.startInstrument()

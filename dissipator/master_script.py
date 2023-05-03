@@ -60,9 +60,9 @@ qb.opt_mixer(sa, cal='SB', freq_span = 1e6, reference = ref_L, amp_q=1,mode='fin
 '''Readout mixer calibration'''
 # set DA to 0 dB attenuation
 inst.set_rr_LO(qb.pars['rr_LO'])
-qm = qb.play_pulses(element='rr',amp_scale=1)
-set_attenuator(0)
-get_attenuation()
+qm = qb.play_pulses(element='rr')
+inst.set_attenuator(0)
+inst.get_attenuation()
 rr_lo_leakage = qb.get_power(sa, freq=qb.pars['rr_LO'],reference=ref_H,config=True,plot=True) # reference should be set ABOVE expected image power
 rr_im_leakage = qb.get_power(sa, freq=qb.pars['rr_LO']-qb.pars['rr_IF'],span = 1e6,reference=ref_H,config=True,plot=True) # reference should be set ABOVE expected image power
 rr_on_power = qb.get_power(sa, freq=qb.pars['rr_LO']+qb.pars['rr_IF'],reference=ref_H,config=True,plot=True) # reference should be set ABOVE expected image power
@@ -120,9 +120,10 @@ qb.write_pars()
 
 # I,Q,freqs,job = qb.run_scan(df = 25e3, n_avg = 250, element='resonator', chunksize = 90e6, attenuation=35, lo_min = 5.636e9, lo_max = 5.636e9,
 #            showprogress=True, res_ringdown_time = int(4e3))
-inst.turn_on_ffl_drive()
-I, Q, freqs, job = qb.resonator_spec(f_LO=qb.pars['rr_LO'],atten=32,IF_min=20e6,IF_max=70e6,df=0.1e6,n_avg=2000,savedata=True)
-
+inst.turn_off_ffl_drive()
+inst.set_rr_LO(qb.pars['rr_LO'])
+qb.set_attenuator(18)
+qb.resonator_spec(f_LO=qb.pars['rr_LO'],atten=qb.pars['rr_atten'],IF_min=63e6,IF_max=93e6,df=0.1e6,n_avg=2000,savedata=True)
 
 #%% punchout
 I, Q, freq_arr, job = qb.punchout(IF_min=20e6,IF_max=70e6,df=0.1e6, atten_range=[0,50], atten_step=2, n_avg=2000)
