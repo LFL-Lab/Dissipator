@@ -18,22 +18,22 @@ import time
 client = Labber.connectToServer()
 # qmm = QuantumMachinesManager()
 # qm = qmm.open_qm(config)
-qubit_LO_model = 'SignalCore SC5506A Signal Generator'
-qubit_LO_name = '10002A07' 
-qubit_LO_quantity_name = {'freq':'RF1 frequency',
-                          'power': 'RF1 power level',
-                          'output': 'RF1 output status'}
+qubit_LO_model = 'SignalCore SC5511A Signal Generator'
+qubit_LO_name = '10002F1D' 
+qubit_LO_quantity_name = {'freq':'Frequency',
+                          'power': 'Power',
+                          'output': 'Output status'}
 
 rr_LO_model = 'SignalCore SC5511A Signal Generator'
 rr_LO_name = '10002A06'
 rr_LO_quantity_name = {'freq': 'Frequency',
                        'output':'Output status'}
 
-ffl_LO_model = 'SignalCore SC5511A Signal Generator'
-ffl_LO_name = '10002F1D'
-ffl_LO_quantity_name = {'freq': 'Frequency',
-                        'power': 'Power',
-                       'output':'Output status'}
+ffl_LO_model = 'SignalCore SC5506A Signal Generator'
+ffl_LO_name = '10002A07'
+ffl_LO_quantity_name = {'freq': 'RF1 frequency',
+                        'power': 'RF1 power level',
+                       'output':'RF1 output status'}
 
 diss_LO_model = 'SignalCore SC5506A Signal Generator'
 diss_LO_name = '10002A08' 
@@ -42,21 +42,28 @@ diss_LO_quantity_name = {'freq':'RF2 frequency',
                           'output': 'RF2 output status'}
 
 flux_source_meter_model = 'Keithley 2400 SourceMeter'
-source_meter_name = 'Victoria'
+coil_source_meter_name = 'Keithley Victoria'
 
 source_meter_quantity_name = {'current': 'Source current',
                               'rate': 'Source current - Sweep rate',
                               'output': 'Output on'}
+
+FFL_source_meter_model = 'Keithley 2400 SourceMeter'
+FFL_source_meter_name = 'Keithley Lisa'
+
+
 def get_flux_bias():
-    csource = client.connectToInstrument(flux_source_meter_model, dict(name=source_meter_name, startup = 'Get config'))
+    csource = client.connectToInstrument(flux_source_meter_model, dict(name=coil_source_meter_name, startup = 'Get config'))
     csource.startInstrument()
     current = csource.getValue(source_meter_quantity_name['current'])
     print(f'flux bias = {round(current * 1e3, 4)} mA')
     return current
     
-def set_flux_bias(current, step = 0.5e-6):
+def set_flux_bias(current, step = 0.5e-6, lower_bound=-100e-6, upper_bound=100e-6):
+    if current > upper_bound or current<lower_bound:
+        raise ValueError('current out of range')
     print(f'Setting flux bias to {round(current*1e3, 4)} mA')
-    csource = client.connectToInstrument(flux_source_meter_model, dict(name=source_meter_name, startup = 'Get config'))
+    csource = client.connectToInstrument(FFL_source_meter_model, dict(name=coil_source_meter_name, startup = 'Get config'))
     csource.startInstrument()
     start_current = csource.getValue(source_meter_quantity_name['current'])
     if current <= start_current:
@@ -65,6 +72,44 @@ def set_flux_bias(current, step = 0.5e-6):
     for value in current_list[1:]:
         csource.setValue(source_meter_quantity_name['current'], value)
         time.sleep(0.5)
+
+def get_ffl_bias():
+    csource = client.connectToInstrument(FFL_source_meter_model, dict(name=FFL_source_meter_name, startup = 'Get config'))
+    csource.startInstrument()
+    current = csource.getValue(source_meter_quantity_name['current'])
+    print(f'FFL bias = {round(current * 1e3, 4)} mA')
+    return current
+
+def set_ffl_bias(current, step = 0.5e-6, lower_bound=-100e-6, upper_bound=100e-6):
+    if current > upper_bound or current<lower_bound:
+        raise ValueError('current out of range')
+    print(f'Setting FFL bias to {round(current*1e3, 4)} mA')
+    csource = client.connectToInstrument(FFL_source_meter_model, dict(name=FFL_source_meter_name, startup = 'Get config'))
+    csource.startInstrument()
+    csource.setValue('Source current range', upper_bound)
+    start_current = csource.getValue(source_meter_quantity_name['current'])
+    if current <= start_current:
+        step = -step
+    current_list = np.round(np.arange(start_current, current + step/2, step),7)
+    for value in current_list[1:]:
+        csource.setValue(source_meter_quantity_name['current'], value)
+        time.sleep(0.5)
+        
+def turn_on_ffl_source_meter():
+    csource = client.connectToInstrument(FFL_source_meter_model, dict(name=FFL_source_meter_name, startup = 'Get config'))
+    csource.startInstrument()
+    csource.setValue(source_meter_quantity_name['current'], 0)
+    csource.setValue(source_meter_quantity_name['output'], True)
+    
+def turn_off_ffl_source_meter():
+    csource = client.connectToInstrument(FFL_source_meter_model, dict(name=FFL_source_meter_name, startup = 'Get config'))
+    csource.startInstrument()
+    current = get_ffl_bias()
+    if current == 0.0:
+        csource.setValue(source_meter_quantity_name['output'], False)
+    else:
+        raise ValueError('ramp back to zero current before turning off')
+    
     
 def set_qb_LO(freq):
     print(f'Setting qubit LO to {round(freq*1e-9,5)} GHz')
@@ -123,7 +168,7 @@ def set_ffl_LO(freq, bprint=True):
     # initialize ffl LO
     fLO = client.connectToInstrument(ffl_LO_model, dict(name=ffl_LO_name, startup = 'Get config'))
     fLO.startInstrument()
-    fLO.setValue('Frequency', freq)
+    fLO.setValue(ffl_LO_quantity_name['freq'], freq)
     fLO.setValue(ffl_LO_quantity_name['power'], 15)
     fLO.setValue(ffl_LO_quantity_name['output'],True)
     

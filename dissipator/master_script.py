@@ -18,18 +18,19 @@ from g_e_f_T1 import measure_leakage_w_ffl
 ref_H = -10
 ref_L = -50
 '''Initialize qubit class'''
-qb = qubit('diss07a')
-
+qb = qubit('diss09a_6024')
+sa =  inst.init_sa()
 
 '''Update important parameters'''
-qb.update_value('rr_freq', 5.6792e9)
-qb.update_value('rr_LO', qb.pars['rr_LO'])
+qb.update_value('rr_freq', 6.025539e9)
+qb.update_value('rr_LO', 5.975e9)
 qb.update_value('rr_IF', qb.pars['rr_freq'] -qb.pars['rr_LO'] )
-qb.update_value('rr_atten', 32)
+qb.update_value('rr_atten', 34)
 qb.update_value('diss_freq', 7.97e9)
-qb.update_value('qubit_freq', 4.6383e9)
-qb.update_value('qubit_IF',150e6 )
-qb.update_value('qubit_LO', qb.pars['qubit_freq'] - qb.pars['qubit_IF'])
+qb.update_value('qubit_freq', 2.2670e9)
+qb.update_value('qubit_LO', 2.2e9)
+qb.update_value('qubit_IF',qb.pars['qubit_freq'] - qb.pars['qubit_LO'] )
+
 #qb.update_value('ffl_freq', qb.pars['diss_freq'] - qb.pars['qubit_freq'])
 #qb.update_value('ffl_freq', qb.pars['diss_freq'] - qb.pars['rr_freq'])
 qb.update_value('ffl_freq', 2.14e9)
@@ -121,42 +122,88 @@ qb.write_pars()
 # I,Q,freqs,job = qb.run_scan(df = 25e3, n_avg = 250, element='resonator', chunksize = 90e6, attenuation=35, lo_min = 5.636e9, lo_max = 5.636e9,
 #            showprogress=True, res_ringdown_time = int(4e3))
 inst.turn_off_ffl_drive()
+qb.update_value('qubit_LO', 2.05e9)
 inst.set_rr_LO(qb.pars['rr_LO'])
-qb.set_attenuator(18)
-qb.resonator_spec(f_LO=qb.pars['rr_LO'],atten=qb.pars['rr_atten'],IF_min=63e6,IF_max=93e6,df=0.1e6,n_avg=2000,savedata=True)
+inst.set_qb_LO(qb.pars['qubit_LO'])
+inst.set_attenuator(qb.pars['rr_atten'])
+qb.resonator_spec(f_LO=qb.pars['rr_LO'],atten=qb.pars['rr_atten'],IF_min=35e6,IF_max=65e6,df=0.1e6,n_avg=2000,savedata=True)
 
 #%% punchout
 I, Q, freq_arr, job = qb.punchout(IF_min=20e6,IF_max=70e6,df=0.1e6, atten_range=[0,50], atten_step=2, n_avg=2000)
 #%% qubit spectroscopy
 
-I,Q,freqs,job = qb.run_scan(df = 100e3, n_avg = 2000, element='qubit', chunksize = 350e6,  lo_min = 2.5e9, lo_max = 5.5e9, amp_q_scaling = 0.9, saturation_dur = 20e3, showprogress=True, res_ringdown_time = int(4e3), check_mixers=False)
+I,Q,freqs,job = qb.run_scan(df = 1000e3, n_avg = 2000, element='qubit', chunksize = 200e6,  lo_min = 1.8e9, lo_max = 2.4e9, amp_q_scaling = 0.6, saturation_dur = 20e3, showprogress=True, res_ringdown_time = int(4e3), check_mixers=False)
 
-I,Q,freqs,job = qb.qubit_spec(sa=sa,f_LO=4.59e9,amp_q_scaling=1,amp_r_scaling=1,IF_min=40e6,IF_max=54e6,df=5e3,n_avg=2000,rr_freq=5.6792e9,atten=32,on_off=True,showprogress=True,savedata=False,check_mixers=False,)
+qb.update_value('qubit_LO', 2.25e9)
+inst.set_qb_LO(qb.pars['qubit_LO'])
+I,Q,freqs,job = qb.qubit_spec(sa=sa,
+                              f_LO=qb.pars['qubit_LO'],
+                              amp_q_scaling=1,amp_r_scaling=1,
+                              IF_min=0.1e6,IF_max=50e6,df=500e3,
+                              n_avg=50000,
+                              rr_freq=qb.pars['rr_freq'],atten=qb.pars['rr_atten'],
+                              on_off=True,showprogress=True,savedata=True,check_mixers=False,)
+
 
 #%% Rabi
+inst.turn_off_ffl_drive()
+qb.update_value('rr_atten', 34)
+inst.set_attenuator(qb.pars['rr_atten'])
+qb.resonator_spec(f_LO=qb.pars['rr_LO'],atten=qb.pars['rr_atten'],IF_min=35e6,IF_max=65e6,df=0.1e6,n_avg=2000,savedata=True)
 
-qb.update_value('pi_amp', 0.4)
-qb.update_value('pi_len', 64)
-amps, I, Q, job, period = qb.power_rabi(a_min = 0.01, a_max = 2.0, da = 0.005,  n_avg = 5000,fit = True, plot = True, detuning = 0e6, check_mixers = False)
+qb.update_value('qubit_freq', 2.2681e9)
+qb.update_value('qubit_LO', 2.2e9)
+inst.set_qb_LO(qb.pars['qubit_LO'])
+qb.update_value('qubit_IF',qb.pars['qubit_freq'] - qb.pars['qubit_LO'] )
+qb.update_value('pi_amp', 0.2)
+qb.update_value('pi_len', 80)
+amps, I, Q, job, period = qb.power_rabi(a_min = 0.01, a_max = 1.1, da = 0.005,  n_avg = 10000,fit = True, plot = True, detuning = 0e6, check_mixers = False)
 
+qb.update_value('pi_amp', 0.1)
+qb.update_value('pi_half_len', 40)
+qb.update_value('pi_len', 80)
 
-t_arr, I, Q, job, pi2width = qb.pulse_exp(exp='rabi',n_avg = 10000, tmin = 0,tmax = 400, dt = 4, amp_q_scaling = 1, fit = True, plot = True,
+qb.update_value('qubit_freq', 2.2681e9)
+qb.update_value('qubit_LO', 2.2e9)
+inst.set_qb_LO(qb.pars['qubit_LO'])
+qb.update_value('qubit_IF',qb.pars['qubit_freq'] - qb.pars['qubit_LO'] )
+
+qb.update_value('pi_amp', 0.2)
+t_arr, I, Q, job, pi2width = qb.pulse_exp(exp='rabi',n_avg = 100000, tmin = 0,tmax = 400, dt = 4, amp_q_scaling = 1, fit = True, plot = True,
                                      detuning = 0e6, check_mixers=False)
-qb.write_pars()
+
+# plot rabi
+x_vector = t_arr
+y_vector = np.stack((I,Q),axis=0)
+fig, axes = plt.subplots(2,2)
+axes = axes.flatten()
+axes[0].plot(x_vector*1e3, y_vector[0]*1e3, '-o', markersize = 3, c='C0')
+axes[1].plot(x_vector*1e3, y_vector[1]*1e3, '-o', markersize = 3, c='C0')
+axes[2].plot(x_vector*1e3, np.angle(y_vector[0]+1j*y_vector[1]), '-o', markersize = 3, c='C0')
+axes[3].plot(x_vector*1e3, np.abs(y_vector[0]+1j*y_vector[1])*1e3, '-o', markersize = 3, c='C0')
+for ax in axes:
+    ax.set_ylabel('Voltage (mV)')
+    ax.set_xlabel('Pulse Duration (ns)')
+qubitDriveFreq = qb.pars['qubit_freq']
+textstr = '$\omega_d$ = %.4f GHz\n$T_{\pi/2}$ = %.1f ns\n$\hat{n}$ = %d'%(qubitDriveFreq*1e-9,0,5000)
+fig.tight_layout()
+plt.gcf().text(1.0, 0.15, textstr, fontsize=14)
+plt.tick_params(axis='both',direction='in',bottom=True, top=True, left=True, right=True,size=8)
+plt.show()
 #%% optimize readout
 
 
 #%% Ramsey
 inst.turn_off_ffl_drive()
 inst.turn_on_ffl_drive()
-t_arr, I, Q, job, fitted_pars = qb.pulse_exp(exp='ramsey', check_mixers = False, n_avg=5000,dt=4,tmin=0,tmax=2e3,detuning=0e3)
+t_arr, I, Q, job, fitted_pars = qb.pulse_exp(exp='ramsey', check_mixers = False, n_avg=100000,dt=16,tmin=0,tmax=4e3,detuning=0e3)
 
 #%% Echo
-qb.pulse_exp(exp = 'echo', n_avg = 1000, tmin = qb.pars['pi_half_len'], tmax = 16 * 100+qb.pars['pi_half_len'], dt = 16, fit=True, check_mixers=False)
+qb.pulse_exp(exp = 'echo', n_avg = 1000, tmin = 0, tmax = 16 * 100+qb.pars['pi_half_len'], dt = 16, fit=True, check_mixers=False)
 
 #%% T1
 
-t_arr, I, Q,job,fitted_pars = qb.pulse_exp(exp='T1',n_avg=5000,tmin=0,tmax=10e3,dt=40,detuning=0)
+t_arr, I, Q,job,fitted_pars = qb.pulse_exp(exp='T1',n_avg=100000,tmin=0,tmax=50e3,dt=500,detuning=0)
 #%% resonator ring down
 qb.pulse_exp(exp = 'ringdown', n_avg = 1000, tmin = 16, tmax =2000, dt = 16, fit=False, check_mixers=False)
 

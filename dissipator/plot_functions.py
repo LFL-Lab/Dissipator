@@ -111,6 +111,8 @@ def spec_plot(freq,I,Q,attenuation=-30,df=0.1e6,plot='mag',element='resonator',f
         # Power data
         ax1 = fig.add_subplot(211)
         ax1.plot(freq,mag,'-o', markersize = 3, c='C0')
+        if fc is not 0 and fc is not np.nan:
+            ax1.axvline(fc/1e9)
         ax1.set_xlabel('Frequency (GHz)')
         ax1.set_ylabel('Magnitude (mV)')
         ax2 = fig.add_subplot(212)
@@ -127,6 +129,10 @@ def spec_plot(freq,I,Q,attenuation=-30,df=0.1e6,plot='mag',element='resonator',f
 
     if element == 'resonator':
         txt = f'$\omega_c$ = {fc*1e-9:.5f} GHz\nFWHM = {fwhm*1e-6:.3f} MHz\n$\kappa$ = {2*np.pi*fwhm*1e-6:.3f} MHz\nReadout attenuation: {attenuation} dB\ndf = {df*1e-3} kHz'
+        if 'flux' in kwargs.keys():
+            flux = kwargs.get('flux')
+            if flux is not None:
+                txt = f'flux = {flux*1e6:.0f} uA\n' + txt
     elif element == 'qubit':
         if len(peaks) == 2:
             txt = '$\omega_{01}$ = %.4f GHz\n$\omega_{02}$/2 = %.4f GHz\n$\\alpha$ = %.1f MHz\n$P_{qb}$ = %.1f dBm\n$P_r$ = %.1f dBm\n$\omega_r$ = %.4f GHz'%(freq[peaks[1]],freq[peaks[0]],(freq[peaks[0]]-freq[peaks[1]])*1e3,qb_power,rr_power,rrFreq*1e-9)
@@ -253,9 +259,15 @@ def fit_res(f_data,z_data,res_type='notch'):
     if res_type == 'notch':
         z_data = -z_data-min(-z_data)
         idx = np.argwhere(np.diff(np.sign(z_data - 0.5*max(z_data)))).flatten()
-        fwhm = f_data[idx[1]] - f_data[idx[0]]
-
+        if len(idx) >=2:
+            fwhm = f_data[idx[1]] - f_data[idx[0]]
+        else:
+            fwhm = np.nan
     return fc,fwhm
+
+def find_peak(f_data,z_data):
+    
+    return fc
 
 #%% fit_data
 def fit_data(x_vector,y_vector,sequence='rabi',dt=0.01,fitFunc='',verbose=0):

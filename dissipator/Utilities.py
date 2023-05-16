@@ -55,7 +55,8 @@ def save_datadict_to_fgroup(f, name, datadict):
             dset_q = subgroup.create_dataset(key, data=datadict[key])
    
         else:
-            subgroup.attrs[key] = datadict['metadata'][key]
+            for k in datadict['metadata'].keys():
+                subgroup.attrs[k] = datadict['metadata'][k]
     print(f'write dataset to {name}')
     
 def get_index_for_filename(saveDir, filename,file_format='h5'):

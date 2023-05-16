@@ -11,25 +11,27 @@ from qm.QuantumMachinesManager import QuantumMachinesManager
 from qm import SimulationConfig
 import instrument_init as inst
 from dissipator import *
+from Utilities import clk
 host='10.71.0.57'
 port='9510'
 class sequence():
     
-    def __init__(self, name, n_avg=100, amp_r_scale=1, amp_ffl_scale=1):
+    def __init__(self, name, n_avg=100, amp_r_scale=1, amp_ffl_scale=1, **kwargs):
         self.name = name
         self.exp_dict = {'n_avg': n_avg,
                          'amp_r_scale': amp_r_scale,
                          'amp_ffl_scale': amp_ffl_scale}
+        for key in kwargs.keys():
+            self.exp_dict[key] = kwargs.get(key)
         
         
-        
-    def make_sequence(self, qb, tmin = 16, tmax=1e3, dt=8):
+    def make_sequence(self, qb, tmin = 16, tmax=1e3, dt=8, ):
         if self.name == 'ringdown_drive_on':
             tmin = clk(tmin)
             tmax = clk(tmax)
             dt = clk(dt)
             t_arr = np.arange(tmin, tmax + dt/2, dt, dtype = int)
-            resettime_clk= 100
+            resettime_clk= clk(qb.pars['rr_resettime'])
             n_avg = self.exp_dict['n_avg']
             amp_r_scale = self.exp_dict['amp_r_scale']
             amp_ffl_scale = self.exp_dict['amp_ffl_scale']
@@ -44,7 +46,7 @@ class sequence():
                 
                 with for_(n, 0, n < n_avg, n + 1):
                     save(n, n_stream)
-                    with for_(*from_array(t,t_arr)):
+                    with for_each_(t, t_arr):
                         with if_(t==0):
                             play("readout"*amp(amp_r_scale), "rr")
                             measure("void", "rr", None,*qb.res_demod(I,Q))
@@ -65,8 +67,49 @@ class sequence():
                     I_stream.buffer(len(t_arr)).average().save("I")
                     Q_stream.buffer(len(t_arr)).average().save("Q")
                     n_stream.save('n')
+
+        elif self.name == 'rr_spec':
+            n_avg = self.exp_dict['n_avg']
+            IF_min = self.exp_dict['IF_min']
+            IF_max = self.exp_dict['IF_max']
+            df = self.exp_dict['df']
+            freqs = np.arange(IF_min, IF_max + df/2, df, dtype=int)
+            rr_pulse_len_in_clk = qb.pars['rr_pulse_len_in_clk']
+            res_ringdown_time = clk(qb.pars['rr_resettime'])
+            ### QUA code ###
+            with program() as prog:
+             
+                n = declare(int)
+                I = declare(fixed)
+                I_st = declare_stream()
+                Q = declare(fixed)
+                Q_st = declare_stream()
+                f = declare(int)
+                n_stream = declare_stream()
+
+                with for_(n, 0, n < n_avg, n + 1):
+
+                    # with for_each_(f, freqs_list):
+                    with for_(f, IF_min, f < IF_max + df/2, f + df):
+                        update_frequency("rr", f)
+                        wait(res_ringdown_time, "rr")
                 
+                        align('rr', 'ffl')
+                
+                        measure("readout", "rr", None,*qb.res_demod(I, Q))
+                        save(I, I_st)
+                        save(Q, Q_st)
+
+                    save(n,n_stream)
+
+                with stream_processing():
+                    I_st.buffer(len(freqs)).average().save('I')
+                    Q_st.buffer(len(freqs)).average().save('Q')
+                    n_stream.save('n')
+                    
         return prog
+    
+    
     
     def simulate_sequence(self,qb, duration):
         duration = clk(duration)
@@ -74,13 +117,20 @@ class sequence():
         prog = self.make_sequence(qb)
         job = qmm.simulate(qb.config, prog, SimulationConfig(duration=duration))
         samples = job.get_simulated_samples()
-        samples.con2.plot(analog_ports=['1','2','3', '4', '5', '6'])
+        samples.con1.plot(analog_ports=['1','2','3', '4', '5', '6'])
         qmm.close_all_quantum_machines()
         return samples
-        
-qb = dissipator('diss09', device_name='diss09_5578')
-qb.update_value('ffl_freq', 3.07e9)
-qb.update_value('ffl_IF', 350e6)
-qb.update_value('ffl_LO', qb.pars['ffl_freq'] - qb.pars['ffl_IF'])
-seq = sequence('ringdown_drive_on')
-samples = seq.simulate_sequence(qb, duration=4000)
+    
+def main():
+    device = 'diss09_6024'
+    qb = dissipator(device, device_name=device)
+    # qb.update_value('ffl_freq', 3.07e9)
+    # qb.update_value('ffl_IF', 350e6)
+    # qb.update_value('ffl_LO', qb.pars['ffl_freq'] - qb.pars['ffl_IF'])
+    qb.update_value('rr_pulse_len_in_clk', 20)
+    seq = sequence('rr_spec', IF_min=45e6,IF_max=54e6,df=0.1e6, res_ringdown_time=int(40))
+    samples = seq.simulate_sequence(qb, duration=4000)
+    qb.update_value('rr_pulse_len_in_clk', 500)
+    
+if __name__ == "__main__":
+    main()

@@ -17,30 +17,40 @@ class dissipator(qubit):
         qubit.__init__(self, qb)
         self.device_name = device_name
         
-    def optimize_mixer(self,sa, element='rr', cal='LO'):
+    def optimize_mixer(self,sa, element='rr', cal='LO', switch='on'):
         ref_H = 0
         ref_L = -45
-        self.play_pulses(element)
+
+        self.play_pulses(element, switch=switch)
         if element == 'rr':
             inst.set_attenuator(0)
             inst.get_attenuation()
-        qb_lo_leakage = self.get_power(sa, freq=self.pars[f'{element}_LO'],reference=ref_H,config=True,plot=True)
-        qb_im_leakage = self.get_power(sa, freq=self.pars[f'{element}_LO']-self.pars[f'{element}_IF'],reference=ref_H,config=True,plot=True)
-        qb_on_power = self.get_power(sa, freq=self.pars[f'{element}_LO']+self.pars[f'{element}_IF'],reference=ref_H, config=True,plot=True) # reference should be set ABOVE expected image power
+        if switch == 'off':
+            ref = ref_L
+        else:
+            ref = ref_H
+        qb_lo_leakage = self.get_power(sa, freq=self.pars[f'{element}_LO'],reference=ref,config=True,plot=True)
+        qb_im_leakage = self.get_power(sa, freq=self.pars[f'{element}_LO']-self.pars[f'{element}_IF'],reference=ref,config=True,plot=True)
+        qb_on_power = self.get_power(sa, freq=self.pars[f'{element}_LO']+self.pars[f'{element}_IF'],reference=ref, config=True,plot=True) # reference should be set ABOVE expected image power
         
-        if qb_lo_leakage > -75: 
-            self.opt_mixer(sa, cal=cal, freq_span = 1e6, reference = ref_H, mode='coarse', element = element)
-        if qb_im_leakage > -75:
-            self.opt_mixer(sa, cal=cal, freq_span = 1e6, reference = ref_H, mode='intermediate', element = element)
-            self.opt_mixer(sa, cal=cal, freq_span = 1e6, reference = ref_H, mode='intermediate', element = element)
+        if qb_lo_leakage > ref_L: 
+            self.opt_mixer(sa, cal=cal, freq_span = 1e6, reference = ref_H, mode='coarse', element = element, switch=switch)
+            # self.opt_mixer(sa, cal=cal, freq_span = 1e6, reference = ref_H, mode='coarse', element = element, switch=switch)
+            self.opt_mixer(sa, cal=cal, freq_span = 1e6, reference = ref_H, mode='intermediate', element = element, switch=switch)
+            # self.opt_mixer(sa, cal=cal, freq_span = 1e6, reference = ref_H, mode='intermediate', element = element, switch=switch)
+        if qb_lo_leakage < ref_L:
+            self.opt_mixer(sa, cal=cal, freq_span = 1e6, reference = ref_L, mode='coarse', element = element, switch=switch)
+            # self.opt_mixer(sa, cal=cal, freq_span = 1e6, reference = ref_L, mode='coarse', element = element, switch=switch)
+            self.opt_mixer(sa, cal=cal, freq_span = 1e6, reference = ref_L, mode='intermediate', element = element, switch=switch)
+            # self.opt_mixer(sa, cal=cal, freq_span = 1e6, reference = ref_L, mode='intermediate', element = element, switch=switch)
         # self.opt_mixer(sa, cal=cal, freq_span = 1e6, reference = ref_L, mode='fine', element = element)
         
         self.write_pars()
         
-    def mixer_powers(self, sa, element='rr'):
+    def mixer_powers(self, sa, element='rr', switch='on'):
         ref_H = 0
         ref_L = -45
-        self.play_pulses(element)
+        self.play_pulses(element, switch=switch)
         qb_lo_leakage = self.get_power(sa, freq=self.pars[f'{element}_LO'],reference=ref_H,config=True,plot=True)
         qb_im_leakage = self.get_power(sa, freq=self.pars[f'{element}_LO']-self.pars[f'{element}_IF'],reference=ref_H,config=True,plot=True)
         qb_on_power = self.get_power(sa, freq=self.pars[f'{element}_LO']+self.pars[f'{element}_IF'],reference=ref_H, config=True,plot=True) # reference should be set ABOVE expected image power

@@ -28,11 +28,12 @@ from pathlib import Path
 import Labber
 import warnings
 import matplotlib.pyplot as plt
+from sequence import *
 
 host='10.71.0.56'
 port='9510'
 logger.setLevel(level='WARNING')
-device = 'diss07a'
+device = 'diss09_6024'
 today = date.today()
 sDate =  today.strftime("%Y%m%d")
 saveDir = f'G:\\Shared drives\\CavityCooling\\data\\{device}\\{sDate}'
@@ -83,6 +84,7 @@ class qubit():
                     "amp_ffl":                      0.45,
                     "ffl_atten":                    0,
                     "ffl_mixer_offsets":             [0,0],
+                    "ffl_mixer_offsets_on":         [0,0],
                     "ffl_mixer_imbalance":           [0,0],
                     }
 
@@ -120,17 +122,26 @@ class qubit():
 
 #%% EXPERIMENTS
  #%%% play_pulses
-    def play_pulses(self,element='qubit',amp_scale=1, simulate=False):
-        if element == 'qubit' or 'ffl' or 'diss':
-            pulse = "const"
-        elif element =='rr':
-            pulse = "readout"
+    def play_pulses(self,element='qubit',amp_scale=1, simulate=False, switch='off', pulse=None):
+        if pulse is None:
+            if element == 'qubit' or element == 'diss':
+                pulse = "const"
+            elif element == 'ffl':
+                if switch == 'on':
+                    pulse = 'const'
+                elif switch == 'off':
+                    pulse = 'null'
+     
+            elif element =='rr':
+                pulse = "readout"
+            else:
+                print(f'element {element} does not exist')
+        
         with program() as play_pulses:
-            with infinite_loop_():
-                play('const'*amp(amp_scale), 'ffl',duration=100)
-                play('readout'*amp(amp_scale), 'rr',duration=100)
             
-
+            with infinite_loop_():
+                play(pulse*amp(amp_scale), element,duration=100)
+    
         qmm = QuantumMachinesManager(host=host, port=port)
         if simulate:
             job = qmm.simulate(self.config, play_pulses, SimulationConfig(duration=200))
@@ -254,7 +265,7 @@ class qubit():
         """
         today = datetime.today()
         sDate =  today.strftime("%Y%m%d")
-        saveDir = f'G:\\Shared drives\\CavityCooling\data\\{self.device_name}\\{sDate}'
+        saveDir = f'G:\\Shared drives\\CavityCooling\data\\{self.name}\\{sDate}'
         
         dataPath = f'{saveDir}\\spectroscopy\\{element}_spec'
         filename = 'data'
@@ -333,10 +344,11 @@ class qubit():
                        df = 0.1e6,
                        atten = 10,
                        n_avg = 500,
-                       res_ringdown_time = int(4e3),
                        port_type = 'notch',
                        fit=True,
-                       savedata=True):
+                       savedata=True,
+                       flux = None,
+                       **kwargs):
         """
 
 
@@ -371,39 +383,15 @@ class qubit():
         freqs = np.arange(IF_min, IF_max + df/2, df, dtype=int)
         # freqs_list = freqs.tolist()
         # set attenuation and change rr_LO freq
-        inst.set_attenuator(attenuation=atten)
+        inst.set_attenuator(attenuation=self.pars['rr_atten'])
 
         self.update_value('rr_LO', value = f_LO)
         inst.set_rr_LO(self.pars['rr_LO'])
-
-        ### QUA code ###
-        with program() as rr_spec:
-
-            n = declare(int)
-            I = declare(fixed)
-            I_st = declare_stream()
-            Q = declare(fixed)
-            Q_st = declare_stream()
-            f = declare(int)
-            n_stream = declare_stream()
-
-            with for_(n, 0, n < n_avg, n + 1):
-
-                # with for_each_(f, freqs_list):
-                with for_(f, IF_min, f < IF_max + df/2, f + df):
-
-                    update_frequency("rr", f)
-                    wait(res_ringdown_time, "rr")
-                    measure("readout", "rr", None,*self.res_demod(I, Q))
-                    save(I, I_st)
-                    save(Q, Q_st)
-
-                save(n,n_stream)
-
-            with stream_processing():
-                I_st.buffer(len(freqs)).average().save('I')
-                Q_st.buffer(len(freqs)).average().save('Q')
-                n_stream.save('n')
+        rr_pulse_len_in_clk = self.pars['rr_pulse_len_in_clk']
+            
+            
+        seq = sequence('rr_spec',n_avg=n_avg, IF_min=IF_min, IF_max=IF_max, df=df,)
+        rr_spec = seq.make_sequence(self)
 
         datadict,job = self.get_results(rr_spec,result_names=["I","Q","n"],showprogress=False)
 
@@ -413,13 +401,17 @@ class qubit():
 
         if fit:
             fc,fwhm = pf.fit_res(freq_arr,np.abs(I+1j*Q))
-            pf.spec_plot(freq_arr,I,Q,attenuation=atten,df=df,iteration=iteration,element='resonator',fwhm=fwhm,fc=fc)
             print(f'Resonant Frequency: {fc*1e-9:.5f} GHz\nFWHM = {fwhm*1e-6} MHz\nkappa = {2*np.pi*fwhm*1e-6:.3f} MHz')
-
+        else:
+            fc = np.nan
+            fwhm= np.nan
+            if 'fc' in kwargs.keys():
+                fc = kwargs['fc']
+        pf.spec_plot(freq_arr,I,Q,attenuation=atten,df=df,iteration=iteration,element='resonator',fwhm=fwhm,fc=fc, flux=flux)
         exp_dict = {'date/time':    datetime.now(),
                    'nAverages': n_avg,
                          'w_LO': self.pars['rr_LO'],
-                'wait_period':  res_ringdown_time,
+                'wait_period':  self.pars['rr_resettime'],
                 }
         if savedata:
             # save data
@@ -741,16 +733,26 @@ class qubit():
                 with for_(n, 0, n < n_avg, n + 1):
                     save(n,n_stream)
                     with for_(*from_array(t,var_arr)):
-                        play("pi_half", "qubit")
-                        wait(t, "qubit")
-                        play("pi", "qubit")
-                        wait(t, "qubit")
-                        play("pi_half", "qubit")
-                        align("qubit","rr")
-                        measure("readout", "rr", None, *self.res_demod(I, Q))
-                        save(I, I_stream)
-                        save(Q, Q_stream)
-                        wait(resettime_clk, "qubit")
+                        with if_(t==0):
+                            play("pi_half", "qubit")
+                            play("pi", "qubit")
+                            play("pi_half", "qubit")
+                            align("qubit","rr")
+                            measure("readout", "rr", None, *self.res_demod(I, Q))
+                            save(I, I_stream)
+                            save(Q, Q_stream)
+                            wait(resettime_clk, "qubit")
+                        with else_():
+                            play("pi_half", "qubit")
+                            wait(t, "qubit")
+                            play("pi", "qubit")
+                            wait(t, "qubit")
+                            play("pi_half", "qubit")
+                            align("qubit","rr")
+                            measure("readout", "rr", None, *self.res_demod(I, Q))
+                            save(I, I_stream)
+                            save(Q, Q_stream)
+                            wait(resettime_clk, "qubit")
 
 
                 with stream_processing():
@@ -1486,7 +1488,7 @@ class qubit():
         return power
 
     #%%%% opt_mixer
-    def opt_mixer(self,sa,cal,mode,element,freq_span=1e6,amp_q=1,reference = -30, plot=True):
+    def opt_mixer(self,sa,cal,mode,element,freq_span=1e6,amp_q=1,reference = -30, plot=True, switch='on'):
         """
         Minimizes leakage at LO ('lo' option) or at image sideband ('sb' option) by sweeping the relevant parameters
 
@@ -1504,7 +1506,7 @@ class qubit():
             argmin (TYPE): DESCRIPTION.
 
         """
-        qm = self.play_pulses(element=element, amp_scale=amp_q)
+        qm = self.play_pulses(element=element, amp_scale=amp_q, switch = switch)
 
         if cal == 'LO':
             freq = self.pars[f'{element}_LO']
@@ -1525,26 +1527,36 @@ class qubit():
         self.config_sa(sa,freq,span=freq_span,reference=reference) # setup spectrum analyzer for measurement
 
         # initialize sweep parameters
-        if cal == 'LO':
+
+        if switch == 'off':
             if mode == 'coarse':
-                span = 40e-3
-                step = 10e-3
-            elif mode == 'intermediate':
-                span = 5e-3
-                step = 1e-3
-            elif mode == 'fine':
-                span = 1e-3
-                step = 0.1e-3
-        elif cal == 'SB':
-            if mode == 'coarse':
-                span = 150e-3
-                step = 30e-3
-            elif mode == 'intermediate':
                 span = 50e-3
                 step = 10e-3
-            elif mode == 'fine':
-                span = 6e-3
+            if mode == 'intermediate':
+                span = 10e-3
                 step = 1e-3
+            
+        else:
+            if cal == 'LO':
+                if mode == 'coarse':
+                    span = 40e-3
+                    step = 10e-3
+                elif mode == 'intermediate':
+                    span = 5e-3
+                    step = 1e-3
+                elif mode == 'fine':
+                    span = 1e-3
+                    step = 0.1e-3
+            elif cal == 'SB':
+                if mode == 'coarse':
+                    span = 150e-3
+                    step = 30e-3
+                elif mode == 'intermediate':
+                    span = 50e-3
+                    step = 10e-3
+                elif mode == 'fine':
+                    span = 6e-3
+                    step = 1e-3
 
         par1_arr = np.arange(par1-span/2, par1+span/2, step)
         par2_arr = np.arange(par2-span/2, par2+span/2, step)
@@ -1553,7 +1565,7 @@ class qubit():
         power_data = np.zeros((L1,L2))
 
         # sweep parameters and get power at every point
-        with tqdm(total = L1*L2) as progress_bar:
+        with tqdm(total = L1*L2,position=0, leave=True) as progress_bar:
             for i, par1 in enumerate((par1_arr)):
                 for j, par2 in enumerate((par2_arr)):
                     if cal == 'LO':
@@ -1569,15 +1581,18 @@ class qubit():
         # print(argmin)
         # set the parameters to the optimal values and modify the JSON dictionary
         if cal == 'LO':
-            opt_I = par1_arr[argmin[0]]
-            opt_Q = par2_arr[argmin[1]]
+            opt_I = round(par1_arr[argmin[0]],6)
+            opt_Q = round(par2_arr[argmin[1]],6)
             qm.set_output_dc_offset_by_element(element, "I", opt_I)
             qm.set_output_dc_offset_by_element(element, "Q", opt_Q)
-            self.update_value(f'{element}_mixer_offsets',[round(opt_I,5), round(opt_Q,5)])
+            if switch == 'off':
+                self.update_value(f'{element}_mixer_offsets',[opt_I, opt_Q,])
+            else:
+                self.update_value(f'{element}_mixer_offsets_on',[opt_I, opt_Q,])
             print(f'optimal I_offset = {round(opt_I*1e3,1)} mV, optimal Q_offset = {round(1e3*opt_Q,1)} mV')
         elif cal == 'SB':
             qm.set_mixer_correction(element,int(self.pars[f'{element}_IF']), int(self.pars[f'{element}_LO']), self.IQ_imbalance(par1_arr[argmin[0]],par2_arr[argmin[1]]))
-            self.update_value(f'{element}_mixer_imbalance',[round(par1_arr[argmin[0]],5),round(par2_arr[argmin[1]],5)])
+            self.update_value(f'{element}_mixer_imbalance',[round(par1_arr[argmin[0]],6),round(par2_arr[argmin[1]],6)])
             print(f"optimal gain = {round(par1_arr[argmin[0]],4)}, optimal phi = {round(par2_arr[argmin[1]],4)}")
 
         if element == 'rr':
@@ -1810,6 +1825,8 @@ class qubit():
                     "digitalInputs": {},
                     "operations": {
                         "const":"const_pulse_IQ_ffl",
+                        "null":"zero_pulse_IQ_ffl",
+                        "offset": "offset_pulse_IQ_ffl",
                     },
                 },
                 
@@ -1837,6 +1854,22 @@ class qubit():
                     "length": 100,
                     "waveforms": {
                         "I": "const_wf_ffl",
+                        "Q": "zero_wf",
+                    },
+                },
+                "offset_pulse_IQ_ffl": {
+                    "operation": "control",
+                    "length": 100,
+                    "waveforms": {
+                        "I": "offset_i_ffl",
+                        "Q": "offset_q_ffl",
+                    },
+                },
+                "zero_pulse_IQ_ffl": {
+                    "operation": "control",
+                    "length": 100,
+                    "waveforms": {
+                        "I": "zero_wf",
                         "Q": "zero_wf",
                     },
                 },
@@ -1962,7 +1995,10 @@ class qubit():
                 "const_wf": {"type": "constant", "sample": pars['amp_q']},
                 "const_wf_rr": {"type": "constant", "sample": pars['amp_r']},
                 "const_wf_ffl": {"type": "constant", "sample": pars['amp_ffl']},
+                "offset_i_ffl": {"type": "constant", "sample": pars['ffl_mixer_offsets_on'][0] - pars['ffl_mixer_offsets'][0]},
+                "offset_q_ffl": {"type": "constant", "sample": pars['ffl_mixer_offsets_on'][1] - pars['ffl_mixer_offsets'][1]},
                 "const_wf_diss": {"type": "constant", "sample": pars['amp_diss']},
+                "gaussian_wf_ffl": {"type": "arbitrary", "samples": [float(arg) for arg in pars["gauss_amp"] * gaussian(pars["gauss_len"], pars["gauss_len"]/5)]},
                 "gaussian_wf": {"type": "arbitrary", "samples": [float(arg) for arg in pars['gauss_amp'] * gaussian(pars['gauss_len'], pars['gauss_len']/5)]},
                 "gaussian_4ns_wf": {"type": "arbitrary", "samples": gauss_wf_4ns},
                 "ro_wf1": {"type": "constant", "sample": pars['amp_r']},
