@@ -45,7 +45,7 @@ class qubit():
                     "qubit_LO":                     int(4.48e9),
                     "qubit_freq":                   int(4.5129e9),
                     "qubit_IF":                     int(4.5129e9) - int(4.48e9),
-                    "qubit_anharm":                 int(250e6),
+                    "qubit_anharm":                 int(-250e6),
                     "qubit_mixer_offsets":          [0,0], # I,Q
                     "qubit_mixer_imbalance":        [0,0], # gain,phase
                     "pi_len":                       48, # needs to be multiple of 4
@@ -851,7 +851,6 @@ class qubit():
                     Q_stream.buffer(len(var_arr)).average().save("Q")
                     n_stream.save('n')
               
-        
                     
         elif exp == 'dissT1':
             resettime_clk= clk(self.pars['diss_resettime'])
