@@ -22,6 +22,7 @@ import os
 from instrument_init import init_sa, init_sa_by_serial_number
 from fflCalibration import acquire_rr_spec_background
 from Utilities import clk
+
 def measure_ringdown_drive_on(qb,
                               amp_r_scale=1, 
                               amp_ffl_scale=1,
@@ -153,7 +154,7 @@ def save_datadict_to_fgroup(f, name, datadict):
         subgroup.attrs[key] = datadict['metadata'][key]
     print(f'write dataset to {name}')
 
-    
+
 #%% ffl punchout
 def ffl_punchout(qb,stepsize = 2, save=True):
     if save:
@@ -183,7 +184,6 @@ def ffl_punchout(qb,stepsize = 2, save=True):
     ax.legend()
     plt.show()
     return fig
-
 
 
 #%% doing sweeps
@@ -419,8 +419,6 @@ def sweep_freq_power(qb, sa = None,
             if not test: 
                 sweep_powers(qb,sa,element='ffl', n_avg=n_avg, amp_ffl_scale=1, data_key=data_key,**kwargs)
                 
-                
-                
     
 
 def measure_base_ringdown_time(qb,sa, flux_list, n_avg =4000, rr_pulse_len=1.2e3):
@@ -477,7 +475,7 @@ def measure_base_ringdown_time(qb,sa, flux_list, n_avg =4000, rr_pulse_len=1.2e3
     
     
     
-def sweep_flux(qb, sa, flux_list, n_avg=4000, rr_pulse_len=1.2e3, bCalibrateRo=True, bOptimizeFFLMixer=True, test=False):
+def sweep_flux(qb, sa, flux_list, n_avg_list=[4000], rr_pulse_len_list=[1.2e3], bCalibrateRo=True, bOptimizeFFLMixer=True, test=False):
     # frequency sweep
     stepsize = 50e6
     fmin = 1e9
@@ -489,7 +487,8 @@ def sweep_flux(qb, sa, flux_list, n_avg=4000, rr_pulse_len=1.2e3, bCalibrateRo=T
     
     if not os.path.exists(saveDir):
         Path(saveDir).mkdir(parents=True, exist_ok=True)
-    filename = f'ringdown_sweepFLux_sweepFFLfreq_ffl_IF={qb.pars["ffl_IF"]/1e6}MHz_amp_ffl={qb.pars["amp_ffl"]}_DA={qb.pars["rr_atten"]}dB_fDA={qb.pars["ffl_atten"]}dB_navg={n_avg}'
+    
+    filename = f'ringdown_sweepFLux_sweepFFLfreq_ffl_IF={qb.pars["ffl_IF"]/1e6}MHz_amp_ffl={qb.pars["amp_ffl"]}_DA={qb.pars["rr_atten"]}dB_fDA={qb.pars["ffl_atten"]}dB'
     index = get_index_for_filename(saveDir, filename)
         
     with h5py.File(f'{saveDir}\\{filename}_{index}.h5','w') as hf:
@@ -509,7 +508,7 @@ def sweep_flux(qb, sa, flux_list, n_avg=4000, rr_pulse_len=1.2e3, bCalibrateRo=T
             rrFreqs = np.array(df.loc[:,'rr_freq'])
         else:
             base_flux = 51e-6
-            dataDict = acquire_rr_spec_background(qb, base_flux=base_flux, n_avg=n_avg, IF_min=45e6, IF_max=54e6)
+            dataDict = acquire_rr_spec_background(qb, base_flux=base_flux, n_avg=n_avg_list[0], IF_min=45e6, IF_max=54e6)
             I0 = dataDict['I']
             Q0 = dataDict['Q']
             freqs = dataDict['freqs']
@@ -517,10 +516,10 @@ def sweep_flux(qb, sa, flux_list, n_avg=4000, rr_pulse_len=1.2e3, bCalibrateRo=T
             p = np.poly1d(z)
             save_datadict_to_fgroup(g_calib, f'flux = {base_flux*1e6:.0f} uA', dataDict)
             
-        for flux in tqdm(flux_list):
+        for i,flux in tqdm(enumerate(flux_list)):
             inst.set_flux_bias(flux)
-            qb.update_value('rr_pulse_len_in_clk', clk(rr_pulse_len))
-
+            qb.update_value('rr_pulse_len_in_clk', clk(rr_pulse_len_list[i]))
+            n_avg = n_avg_list[i]
             if bCalibrateRo:
                 I, Q, freqs, job = qb.resonator_spec(f_LO=qb.pars['rr_LO'],atten=qb.pars['rr_atten'],IF_min=45e6,IF_max=54e6,df=0.1e6,n_avg=n_avg,savedata=True,fit=False)
                 fc,fwhm = pf.fit_res(freqs,np.abs(I+1j*Q) - p(freqs))
@@ -530,6 +529,8 @@ def sweep_flux(qb, sa, flux_list, n_avg=4000, rr_pulse_len=1.2e3, bCalibrateRo=T
                     'Q': Q,
                     'freqs': freqs,
                     'metadata': {'flux': flux,
+                                 'n_avg': n_avg,
+                                 'rr_pulse_len_in_clk': clk(rr_pulse_len_list[i]),
                                  'rr_freq': fc},
                     }
                 save_datadict_to_fgroup(g_calib, f'flux = {flux*1e6:.0f} uA', dataDict)
@@ -556,22 +557,25 @@ def main():
     qb = dissipator('diss09_6024', device_name='diss09_6024')
     qb.update_value('diss_freq', 10.1e9)
     qb.update_value('rr_LO', 5.975e9)
-    qb.update_value('rr_atten', 24)
+    qb.update_value('rr_atten', 23)
     qb.update_value('amp_ffl', 0.3)
     qb.update_value('ffl_freq', qb.pars['diss_freq'] - qb.pars['rr_freq'])
     qb.update_value('ffl_IF', 0)
     qb.update_value('ffl_LO', qb.pars['ffl_freq'] - qb.pars['ffl_IF'])
     qb.update_value('ffl_atten', 25)
     inst.set_rr_LO(qb.pars['rr_LO']) # turn on
-    n_avg = 10000
+    n_avg = 2000
     bOptimizeFFLMixer = True
     bOptimizeRRMixer = True
     bCalibrateRo = True
     test = False
         
     # flux_list = np.array([-80, -58, -49.0, -42.0, -36.0, -31.0, -26.0, -22.0, -18.0, -15.0]) * 1e-6
-    flux_list = np.array([-8.0, -5.0, -3.0, -1.0, 2.0])*1e-6
-    rr_pulse_len = 0.7e3
+    flux_list = np.array([-80,  -36.0, -15.0]) * 1e-6
+    # flux_list = np.array([-8.0, -5.0, -3.0, -1.0, 2.0])*1e-6
+    # flux_list = np.array([13]) *1e-6
+    rr_pulse_len_list = [1.2e3]*2 + [1e3]*1
+    n_avg_list = [2000, 2000, 2500]
     
     sa = inst.init_sa()
     if bOptimizeRRMixer:
@@ -585,8 +589,8 @@ def main():
         
     start = timeit.default_timer() 
     
-    sweep_flux(qb,sa,flux_list=[flux_list[2]],n_avg=n_avg, rr_pulse_len=rr_pulse_len, bOptimizeFFLMixer=bOptimizeFFLMixer, test=test)
-    # measure_base_ringdown_time(qb,sa, flux_list, n_avg =n_avg, rr_pulse_len=rr_pulse_len)
+    sweep_flux(qb,sa,flux_list=flux_list,n_avg_list=n_avg_list, rr_pulse_len_list=rr_pulse_len_list, bOptimizeFFLMixer=bOptimizeFFLMixer, test=test)
+    # measure_base_ringdown_time(qb,sa, flux_list, n_avg_list =n_avg_list, rr_pulse_len_list=rr_pulse_len_list)
     
     sa_close_device(sa)
     stop = timeit.default_timer() 

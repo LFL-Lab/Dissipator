@@ -71,6 +71,7 @@ def spec_plot(freq,I,Q,attenuation=-30,df=0.1e6,plot='mag',element='resonator',f
     I = I*1e3
     Q = Q*1e3
     mag = np.abs(I+1j*Q)
+    power=10*np.log10((10**-3)*(mag**2)/50)
 
     phase = np.unwrap(np.angle(I+1j*Q))
     if element == 'qubit' and find_peaks:
@@ -110,11 +111,11 @@ def spec_plot(freq,I,Q,attenuation=-30,df=0.1e6,plot='mag',element='resonator',f
     elif element == 'resonator' or 'ffl':
         # Power data
         ax1 = fig.add_subplot(211)
-        ax1.plot(freq,mag,'-o', markersize = 3, c='C0')
+        ax1.plot(freq,power,'-o', markersize = 3, c='C0')
         if fc is not 0 and fc is not np.nan:
             ax1.axvline(fc/1e9)
         ax1.set_xlabel('Frequency (GHz)')
-        ax1.set_ylabel('Magnitude (mV)')
+        ax1.set_ylabel('Power (dBm)')
         ax2 = fig.add_subplot(212)
         ax2.plot(freq,phase,'-o', markersize = 3, c='C0')
         ax2.set_xlabel('Frequency (GHz)')

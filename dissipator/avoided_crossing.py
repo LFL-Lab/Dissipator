@@ -11,17 +11,17 @@ resonator spectroscopy as a function of flux bias
 
 from dissipator import *
 import instrument_init as inst
-device = 'diss09_5578'
-qb = dissipator('diss09', device_name=device)
-qb.update_value('rr_LO', 5.5e9)
+device = 'diss09_6024'
+qb = dissipator('diss09_6024', device_name=device)
+qb.update_value('rr_LO', 5.975e9)
 inst.set_rr_LO(qb.pars['rr_LO'])
-start_flux = -100e-6
-stop_flux = 800e-6
+start_flux = -200e-6
+stop_flux = 200e-6
 step = 5e-6
 flux_list = np.round(np.arange(start_flux, stop_flux + step/2, step),7)
-center = 5.58e9
-span = 25e6
-num_of_points=1601
+center = 6.021e9
+span = 13e6
+num_of_points=601
 start = int(center-span/2)
 stop = int(center+span/2)
 df = int(span/num_of_points-1)
@@ -45,10 +45,10 @@ filename = f'fluxSweep_{device}_start={round(start_flux*1e6)}uA_stop={round(stop
 index = get_index_for_filename(saveDir, filename)
 with h5py.File(f'{saveDir}\\{filename}_{index}.h5','w') as hf:
     for i,flux in enumerate(tqdm(flux_list)):
-        inst.set_flux_bias(flux)
+        inst.set_flux_bias(flux, step = 2e-6 , lower_bound=-1e-3, upper_bound=1e-3)
         I, Q, freqs, job = qb.resonator_spec(f_LO=qb.pars['rr_LO'],
                                              atten=qb.pars['rr_atten'],
-                                             IF_min=IF_min,IF_max=IF_max,df=df,n_avg=1000,savedata=True)
+                                             IF_min=IF_min,IF_max=IF_max,df=df,n_avg=1000,savedata=False)
         dataDict = {'freqs': freqs,
                     'I': I,
                     'Q': Q}

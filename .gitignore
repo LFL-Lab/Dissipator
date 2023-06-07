@@ -57,3 +57,5 @@ Thumbs.db
 # other
 *.env
 
+dissipator/{saveDir}/
+

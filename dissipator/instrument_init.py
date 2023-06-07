@@ -59,12 +59,13 @@ def get_flux_bias():
     print(f'flux bias = {round(current * 1e3, 4)} mA')
     return current
     
-def set_flux_bias(current, step = 0.5e-6, lower_bound=-100e-6, upper_bound=100e-6):
+def set_flux_bias(current, step = 0.5e-6, lower_bound=-1e-3, upper_bound=1e-3): #DVK: Changed the bound to 1 mA to make sure we stay in the mA range
     if current > upper_bound or current<lower_bound:
         raise ValueError('current out of range')
     print(f'Setting flux bias to {round(current*1e3, 4)} mA')
     csource = client.connectToInstrument(FFL_source_meter_model, dict(name=coil_source_meter_name, startup = 'Get config'))
     csource.startInstrument()
+    csource.setValue('Source current range', upper_bound)
     start_current = csource.getValue(source_meter_quantity_name['current'])
     if current <= start_current:
         step = -step

@@ -84,15 +84,16 @@ class Experiment:
                 else:
                     label = 'drive off, '
     
-                axes[0].plot(time, decay(time,fitted_pars[0], fitted_pars[1], fitted_pars[2]),'-',color =colors[i],label=label+r'$\tau$'+'={%d}'%(fitted_pars[1]*1e3)+r'$\pm$'+'{%d} ns'%(t1_err[i]*1e3))
+                axes[0].plot(time, decay(time,fitted_pars[0], fitted_pars[1], fitted_pars[2]),'-',color =colors[i],label=label+r'$\tau$'+f'={fitted_pars[1]*1e3:.0f}'+r'$\pm$'+f'{t1_err[i]*1e3:.0f}'+r'$\mu$s')
                 axes[0].set_xlabel('delay time ('+r'$\mu$'+'s)')
                 axes[0].set_ylabel('voltage (mV)')
                 axes[0].legend(fontsize=7,bbox_to_anchor=(1.3, -0.22),ncol=2)
-                
+            axes[0].set_xlim(0, 1)
                 
         if plot:
             amp_list = [round(0.0 + 0.1* n,1) for n in range(len(amp_keys)-1)]
             self.sweep_list['amp_list'] = amp_list
+            axes[-1].set_xlabel('drive amplitude scaling')
             axes[-1].errorbar(amp_list, t1[1:], yerr=t1_err[1:],color=colors[0], label=f'{flux}uA, {fflFreq}GHz')
             axes[-1].legend()
             fig.tight_layout()
@@ -126,6 +127,7 @@ class Experiment:
         stop_index = np.argmin(abs(np.array(self.sweep_list['freq_list'])-stop_freq))
         for i,flux in enumerate(self.sweep_list['flux_list']):
             flux_data = self.data['t1'][:,:,i,0]
+            plt.rcParams.update({'font.size': 12})
             plt.imshow(flux_data[:stop_index,1:], cmap='RdBu', interpolation='nearest',origin='lower', 
                        extent=[self.sweep_list['amp_list'][0],self.sweep_list['amp_list'][-1], 
                                self.sweep_list['freq_list'][0], self.sweep_list['freq_list'][stop_index]],
@@ -135,9 +137,15 @@ class Experiment:
             plt.xlabel('drive amplitude scaling')
             plt.ylabel('drive frequency (GHz)')
             plt.show()
+        return fig
+#%% plotting data
+res_flux = Experiment(dataDir = 'G:\\Shared drives\\CavityCooling\\data\\diss09_6024\\20230518\\fluxSweep\\',
+                filename = 'fluxSweep_diss09_6024_start=-200uA_stop=200uA_5.h5')
+res_flux.plot_data()
 
+#%% example
 t1 = Experiment(dataDir = 'G:\\Shared drives\\CavityCooling\\data\\diss09_6024\\20230515\\ringdown\\',
                 filename = 'ringdown_sweepFLux_sweepFFLfreq_ffl_IF=0.0MHz_amp_ffl=0.3_DA=24dB_fDA=20dB_navg=2000_2.h5')
 t1.read_sweep_parameters()
 t1.analyze_data(data_key=t1.data_key_list[1])
-t1.plot_data()
+fig = t1.plot_data()

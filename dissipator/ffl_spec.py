@@ -15,10 +15,9 @@ from instrument_init import init_sa, init_sa_by_serial_number
 import matplotlib.pyplot as plt
 
 
-
-qb = dissipator('diss09', device_name='diss09_5578')
+qb = dissipator('diss09', device_name='diss09_6024')
 qb.update_value('ffl_atten', 40)
-# flux_list = [50e-6, 60e-6, 70e-6, 80e-6, 90e-6]
+flux_list = [-50e-6, -60e-6, -70e-6, -80e-6, -90e-6]
 fmin = 2.4e9
 fmax = 4.7e9
 df = 10e6

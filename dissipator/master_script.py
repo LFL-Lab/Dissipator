@@ -6,7 +6,7 @@ Created on Tue Nov  8 12:42:53 2022
 """
 sa = sa
 # from mixer_calibration import get_power,opt_mixer
-
+from dissipator import dissipator
 from qubit import qubit
 import instrument_init as inst
 import plot_functions as pf
@@ -18,14 +18,14 @@ from g_e_f_T1 import measure_leakage_w_ffl
 ref_H = -10
 ref_L = -50
 '''Initialize qubit class'''
-qb = qubit('diss09a_6024')
+qb = dissipator('diss09b_611',device_name='diss09b_611')
 sa =  inst.init_sa()
 
 '''Update important parameters'''
-qb.update_value('rr_freq', 6.025539e9)
+qb.update_value('rr_freq', 6.11220e9)
 qb.update_value('rr_LO', 5.975e9)
 qb.update_value('rr_IF', qb.pars['rr_freq'] -qb.pars['rr_LO'] )
-qb.update_value('rr_atten', 34)
+qb.update_value('rr_atten', 33)
 qb.update_value('diss_freq', 7.97e9)
 qb.update_value('qubit_freq', 2.2670e9)
 qb.update_value('qubit_LO', 2.2e9)
@@ -46,7 +46,7 @@ inst.set_qb_LO(qb.pars['qubit_LO'])
 qm = qb.play_pulses(element='qubit',amp_scale=1)
 
 
-qb_lo_leakage = qb.get_power(sa, freq=qb.pars['qubit_LO'],reference=ref_H,config=True,plot=True)
+qb_lo_leakage = qb.get_power(sa, freq=qb.pars['qubit_LO'],reference=-20,config=True,plot=True)
 qb_im_leakage = qb.get_power(sa, freq=qb.pars['qubit_LO']-qb.pars['qubit_IF'],reference=ref_H,config=True,plot=True)
 qb_on_power = qb.get_power(sa, freq=qb.pars['qubit_LO']+qb.pars['qubit_IF'],reference=ref_H, config=True,plot=True) # reference should be set ABOVE expected image power
 
@@ -126,13 +126,13 @@ qb.update_value('qubit_LO', 2.05e9)
 inst.set_rr_LO(qb.pars['rr_LO'])
 inst.set_qb_LO(qb.pars['qubit_LO'])
 inst.set_attenuator(qb.pars['rr_atten'])
-qb.resonator_spec(f_LO=qb.pars['rr_LO'],atten=qb.pars['rr_atten'],IF_min=35e6,IF_max=65e6,df=0.1e6,n_avg=2000,savedata=True)
+qb.resonator_spec(f_LO=qb.pars['rr_LO'],atten=10,IF_min=133e6,IF_max=140e6,df=50e3,n_avg=4000,savedata=True)
 
 #%% punchout
 I, Q, freq_arr, job = qb.punchout(IF_min=20e6,IF_max=70e6,df=0.1e6, atten_range=[0,50], atten_step=2, n_avg=2000)
 #%% qubit spectroscopy
 
-I,Q,freqs,job = qb.run_scan(df = 1000e3, n_avg = 2000, element='qubit', chunksize = 200e6,  lo_min = 1.8e9, lo_max = 2.4e9, amp_q_scaling = 0.6, saturation_dur = 20e3, showprogress=True, res_ringdown_time = int(4e3), check_mixers=False)
+I,Q,freqs,job = qb.run_scan(df = 300e3, n_avg = 5000, element='qubit', chunksize = 250e6,  lo_min = 3e9, lo_max = 4e9, amp_q_scaling = 1, saturation_dur = 20e3, showprogress=True, res_ringdown_time = int(4e3), check_mixers=False)
 
 qb.update_value('qubit_LO', 2.25e9)
 inst.set_qb_LO(qb.pars['qubit_LO'])
@@ -262,4 +262,5 @@ dataDict, fig = measure_t1_ffl_off(qb, amp_r_scale=1,amp_ffl_scale=0.3, tmin = 0
 dataDict, fig = measure_t1_w_ffl(qb,amp_r_scale=1,amp_ffl_scale=0.6, tmin = 0, tmax = 3e3, dt = 16, n_avg = 10000,)
 dataDict, fig = measure_leakage_w_ffl(amp_r_scale=1,amp_ffl_scale=0.4, tmin = 0, tmax = 6e3, dt = 64, n_avg = 10000,)
 
-
+for atten in [30,33,35,37,39]:
+    qb.resonator_spec(f_LO=qb.pars['rr_LO'],atten=atten,IF_min=133e6,IF_max=140e6,df=25e3,n_avg=15000,savedata=True)
