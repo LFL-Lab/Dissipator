@@ -802,7 +802,7 @@ class qubit():
 
                 I_stream, Q_stream, n_stream = self.declare_streams(stream_num=3)
 
-                update_frequency('qubit', (self.pars['qubit_freq']-self.pars['qubit_LO'])) # drives at e-f transition
+                update_frequency('qubit', (self.pars['qubit_freq']-self.pars['qubit_LO'])) 
                 ##make sure mixer is calibrated properly.
 
                 with for_(n, 0, n < n_avg, n + 1):
@@ -819,7 +819,7 @@ class qubit():
                             with else_():
                                 play("pi", "qubit")
                                 update_frequency('qubit', (self.pars['qubit_freq']-self.pars['qubit_LO'] + self.pars['qubit_anharm']))
-                                play("pi" * amp(amp_q_scaling), "qubit", duration=t)
+                                play("pi" * amp(amp_q_scaling), "qubit", duration=t)  # drives at e-f transition
                                 align("qubit", "rr")
                                 measure("readout", "rr", None, *self.res_demod(I, Q))
                                 # save(t,t_stream)
@@ -828,6 +828,7 @@ class qubit():
                                 wait(resettime_clk,"qubit")
                                 update_frequency('qubit', (self.pars['qubit_freq']-self.pars['qubit_LO'])
                         with else_():
+                            update_frequency('qubit', (self.pars['qubit_freq']-self.pars['qubit_LO'] + self.pars['qubit_anharm']))
                             with if_(t==0):
                                 measure("readout", "rr", None, *self.res_demod(I, Q))
                                 # save(t,t_stream)
@@ -835,15 +836,14 @@ class qubit():
                                 save(Q, Q_stream)
                                 wait(resettime_clk,"qubit")
                             with else_():
-                                update_frequency('qubit', (self.pars['qubit_freq']-self.pars['qubit_LO'] + self.pars['qubit_anharm']))
-                                play("pi" * amp(amp_q_scaling), "qubit", duration=t)
+                                play("pi" * amp(amp_q_scaling), "qubit", duration=t)   # drives at e-f transition
                                 align("qubit", "rr")
                                 measure("readout", "rr", None, *self.res_demod(I, Q))
                                 # save(t,t_stream)
                                 save(I, I_stream)
                                 save(Q, Q_stream)
                                 wait(resettime_clk,"qubit")
-                                update_frequency('qubit', (self.pars['qubit_freq']-self.pars['qubit_LO'])
+                                
                             
 
                 with stream_processing():
