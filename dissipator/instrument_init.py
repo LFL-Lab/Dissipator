@@ -29,11 +29,18 @@ rr_LO_name = '10002A06'
 rr_LO_quantity_name = {'freq': 'Frequency',
                        'output':'Output status'}
 
-ffl_LO_model = 'SignalCore SC5506A Signal Generator'
-ffl_LO_name = '10002A07'
-ffl_LO_quantity_name = {'freq': 'RF1 frequency',
+fflqc_LO_model = 'SignalCore SC5506A Signal Generator'
+fflqc_LO_name = '10002A07'
+fflqc_LO_quantity_name = {'freq': 'RF1 frequency',
                         'power': 'RF1 power level',
                        'output':'RF1 output status'}
+
+ffl_LO_model = 'SignalCore SC5511A Signal Generator'
+ffl_LO_name = '1000334C'
+ffl_LO_quantity_name = {'freq':'Frequency',
+                          'power': 'Power',
+                          'output': 'Output status'}
+
 
 diss_LO_model = 'SignalCore SC5506A Signal Generator'
 diss_LO_name = '10002A08' 
@@ -173,6 +180,22 @@ def set_ffl_LO(freq, bprint=True):
     fLO.setValue(ffl_LO_quantity_name['power'], 15)
     fLO.setValue(ffl_LO_quantity_name['output'],True)
     
+    
+def get_fflqc_LO():
+    # initialize qubit LO
+    fLO = client.connectToInstrument(fflqc_LO_model, dict(name=fflqc_LO_name, startup = 'Get config'))
+    fLO.startInstrument()
+    return fLO.getValue(fflqc_LO_quantity_name['freq'])
+
+def set_fflqc_LO(freq, bprint=True):
+    if bprint:
+        print(f'Setting fflqc LO to {round(freq*1e-9,5)} GHz')
+    # initialize ffl LO
+    fLO = client.connectToInstrument(fflqc_LO_model, dict(name=fflqc_LO_name, startup = 'Get config'))
+    fLO.startInstrument()
+    fLO.setValue(fflqc_LO_quantity_name['freq'], freq)
+    fLO.setValue(fflqc_LO_quantity_name['power'], 15)
+    fLO.setValue(fflqc_LO_quantity_name['output'],True)
 
     
 def turn_on_ffl_drive():
@@ -185,6 +208,15 @@ def turn_off_ffl_drive():
     fLO.startInstrument()
     fLO.setValue(ffl_LO_quantity_name['output'],False)
 
+def turn_on_fflqc_drive():
+    fLO = client.connectToInstrument(fflqc_LO_model, dict(name=fflqc_LO_name, startup = 'Get config'))
+    fLO.startInstrument()
+    fLO.setValue(fflqc_LO_quantity_name['output'],True)
+    
+def turn_off_fflqc_drive():
+    fLO = client.connectToInstrument(fflqc_LO_model, dict(name=fflqc_LO_name, startup = 'Get config'))
+    fLO.startInstrument()
+    fLO.setValue(fflqc_LO_quantity_name['output'],False)
 
     
 def turn_diss_LO_off():
@@ -205,25 +237,27 @@ def turn_qb_LO_off():
     
 def set_attenuator(attenuation):
     # initialize digital attenuator
-    attn = client.connectToInstrument('Vaunix Lab Brick Digital Attenuator',dict(name='rr atten',address='24679'))
+    # attn = client.connectToInstrument('Vaunix Lab Brick Digital Attenuator',dict(name='rr atten',address='24679'))
+    attn = client.connectToInstrument('Vaunix Lab Brick Digital Attenuator',dict(name='rr atten',address='26551'))
     attn.startInstrument()
     attn.setValue('Attenuation',attenuation)
 
 def get_attenuation():
     # initialize digital attenuator
-    attn = client.connectToInstrument('Vaunix Lab Brick Digital Attenuator',dict(name='rr atten',address='24679'))
+    # attn = client.connectToInstrument('Vaunix Lab Brick Digital Attenuator',dict(name='rr atten',address='24679'))
+    attn = client.connectToInstrument('Vaunix Lab Brick Digital Attenuator',dict(name='rr atten',address='26551'))
     attn.startInstrument()
     return attn.getValue('Attenuation')
 
 def set_ffl_attenuator(attenuation):
     # initialize digital attenuator
-    attn = client.connectToInstrument('Vaunix Lab Brick Digital Attenuator',dict(name='ffl attenuator',address='26551'))
+    attn = client.connectToInstrument('Vaunix Lab Brick Digital Attenuator',dict(name='ffl attenuator',address='26776'))
     attn.startInstrument()
     attn.setValue('Attenuation',attenuation)
 
 def get_ffl_attenuation():
     # initialize digital attenuator
-    attn = client.connectToInstrument('Vaunix Lab Brick Digital Attenuator',dict(name='ffl attenuator',address='26551'))
+    attn = client.connectToInstrument('Vaunix Lab Brick Digital Attenuator',dict(name='ffl attenuator',address='26776'))
     attn.startInstrument()
     return attn.getValue('Attenuation')
 

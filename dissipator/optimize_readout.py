@@ -10,7 +10,7 @@ import instrument_init as inst
 import plot_functions as pf
 import numpy as np
 
-qb = qubit('logical')
+qb = dissipator('diss08_11a',device_name='diss08_11a')
 
 inst.set_rr_LO(qb.pars['rr_LO'])
 inst.set_qb_LO(qb.pars['qubit_LO'])
@@ -22,7 +22,7 @@ datadict, job = qb.get_results(jobtype = prog,result_names=['n', 'I','Q','Iexc',
 
  
 plot, ax = pf.init_IQ_plot()
-pf.plot_single_shot(datadict,axes=ax)
+pf.plot_single_shot(datadict)#,axes=ax)
 
 
 # optimize frequency

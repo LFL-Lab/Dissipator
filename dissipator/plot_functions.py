@@ -65,7 +65,7 @@ def tof_plot(adc1,adc2):
     plt.show()
 
 #%% spec_plot
-def spec_plot(freq,I,Q,attenuation=-30,df=0.1e6,plot='mag',element='resonator',fwhm=0,fc=0,qb_power=0,rr_power=0,rrFreq=0,iteration=1,find_peaks=False, **kwargs):
+def spec_plot(freq,I,Q,attenuation=-30,df=0.1e6,plot='mag',element='resonator',fwhm=0,fc=0,qb_power=0,rr_power=0,rrFreq=0,iteration=1,find_peaks=False, amp_q_scaling=1, amp_cav_scaling=0.01,amp_ffl_scaling=0.01, flux=0,**kwargs):
 
     freq = freq*1e-9
     I = I*1e3
@@ -111,11 +111,11 @@ def spec_plot(freq,I,Q,attenuation=-30,df=0.1e6,plot='mag',element='resonator',f
     elif element == 'resonator' or 'ffl':
         # Power data
         ax1 = fig.add_subplot(211)
-        ax1.plot(freq,power,'-o', markersize = 3, c='C0')
+        ax1.plot(freq,mag,'-o', markersize = 3, c='C0')
         if fc is not 0 and fc is not np.nan:
             ax1.axvline(fc/1e9)
         ax1.set_xlabel('Frequency (GHz)')
-        ax1.set_ylabel('Power (dBm)')
+        ax1.set_ylabel('Voltage (mV)')
         ax2 = fig.add_subplot(212)
         ax2.plot(freq,phase,'-o', markersize = 3, c='C0')
         ax2.set_xlabel('Frequency (GHz)')
@@ -140,14 +140,14 @@ def spec_plot(freq,I,Q,attenuation=-30,df=0.1e6,plot='mag',element='resonator',f
         elif len(peaks) == 1:
             txt = '$\omega_{01}$ = %.4f GHz\n$P_{qb}$ = %.1f dBm\n$P_r$ = %.1f dBm\n$\omega_r$ = %.4f GHz'%(freq[peaks[0]], qb_power, rr_power, rrFreq*1e-9)
         else:
-            txt = '$P_{qb}$ = %.1f dBm\n$P_r$ = %.1f dBm\n$\omega_r$ = %.4f GHz'%(qb_power,rr_power,rrFreq*1e-9)
+            txt = '$P_{qb}$ = %.1f dBm\n$P_r$ = %.1f dBm\n$\omega_r$ = %.4f GHz\n$amp_qscale$ = %.5f \n$amp_{cav}scale$= %.3f \n$amp_{ffl}scale$= %.3f'%(qb_power,rr_power,rrFreq*1e-9, amp_q_scaling, amp_cav_scaling, amp_ffl_scaling)
     
     elif element =='ffl':
         if 'current' in kwargs:
             current = round(kwargs.get('current')*1e6)
         else:
             current = 'N/A'
-        txt = f'$\omega_c$ = flux: {current}$ \mu$A\nFFL attenuation: {attenuation} dB\ndf = {df*1e-3} kHz'
+        txt = f' flux: {flux} mA\nFFL attenuation: {attenuation} dB\ndf = {df*1e-3} kHz \nffl scale = {amp_ffl_scaling}'
     plt.gcf().text(1, 0.15, txt, fontsize=14)
     # fig.set_title(f'{element} spectroscopy {iteration}')
     plt.tight_layout()
@@ -200,13 +200,15 @@ def heatplot(xdata, ydata, data, xlabel = "", ylabel = "", normalize=False, cbar
     hm.spines[:].set_visible(True)
     ax.tick_params(direction='out',length=0.01,width=0.5,bottom=True, top=True, left=True, right=True,labeltop=False, labelbottom=True,labelrotation=90,labelsize=8,size=8)
     plt.yticks(rotation=0)
+    ax.invert_yaxis()
     plt.tight_layout()
     plt.show()
 
     return hm;
 
 #%% plot_single_shot
-def plot_single_shot(datadict, axes=0):
+def plot_single_shot(datadict):
+    plot, ax = init_IQ_plot()
     datadict = {key: np.array(value, dtype=float) for key,value in datadict.items()}
     datadict = {key: value*1e3 for key,value in datadict.items()} # convert to mV
     datadict = {key: value.tolist() for key,value in datadict.items()} # convert to list
@@ -221,8 +223,27 @@ def plot_single_shot(datadict, axes=0):
             'Q [mV]':   np.hstack((datadict['Q'],datadict['Qexc'])),
             'States':   states
                 }
+    I = np.array(datadict["I"])
+    Q = np.array(datadict["Q"])
+    Iexc=np.array(datadict["Iexc"])
+    Qexc = np.array(datadict["Qexc"])
+    
+    y_gr = np.average(np.abs(I+1j*Q))
+    phase_gr=np.average(np.arctan(Q/I))
+    y_exc= np.average(np.abs(Iexc+1j*Qexc))
+    phase_exc=np.average(np.arctan(Qexc/Iexc))
+    # print("ground voltage:", y_gr)
+    # print("excited volgate:", y_exc )
+    # print("ground phase:", phase_gr)
+    # print("excited phase:", phase_exc )
+    print('contrast_mag',y_gr-y_exc)
+    print('rotation',(phase_gr+phase_exc)/2)
+    print("contrast_Q",y_gr*(np.abs(np.sin((phase_gr-phase_exc)/2)))+(y_exc*np.abs((np.sin((phase_gr-phase_exc))/2))))
+    #print("contrast_I",y_gr*(np.abs(np.cos((phase_gr-phase_exc)/2)))-(y_exc*np.abs((np.cos((phase_gr-phase_exc))/2))))
+    
+          
     dataF = pd.DataFrame(data=data)
-    plot = sns.jointplot(data=dataF, x='I [mV]',y='Q [mV]',hue='States',ax=axes,space=0)
+    plot = sns.jointplot(data=dataF, x='I [mV]',y='Q [mV]',hue='States',ax=ax,space=0)
     plt.show()
 
 #%% plot_mixer_opt
@@ -289,7 +310,7 @@ def fit_data(x_vector,y_vector,sequence='rabi',dt=0.01,fitFunc='',verbose=0):
 
 
 
-    if sequence == "rabi":
+    if sequence == "rabi" or sequence == "qubit_temp" or sequence == 'qb-reset':
         fitFunction = rabi
         period = 1e3/(extract_freq(x_vector*1e3, y_vector, dt,plot=0))
         print('Period Initial Guess: %.1f ns'%(period))
@@ -308,7 +329,7 @@ def fit_data(x_vector,y_vector,sequence='rabi',dt=0.01,fitFunc='',verbose=0):
         ub = [10*amp,10*period,2*pi,2*abs(offset)]
         p0 = [amp,period,phase,offset]
 
-    elif sequence == "ramsey":
+    elif sequence == "ramsey" or sequence == "cavity-cooling-ramsey" or sequence=="ramsey_chi":
         f = extract_freq(x_vector, y_vector,dt,plot=0)
         # print('Initial Guess for Freq:%.4f MHz'%(f))
         if x_vector[-1] > 20:
@@ -341,7 +362,7 @@ def fit_data(x_vector,y_vector,sequence='rabi',dt=0.01,fitFunc='',verbose=0):
             fitFunction = decay
             y_vector = env
             # fitted_pars, covar = scy.optimize.curve_fit(decay, x_vector, env,p0=p0,method='trf',bounds=[lb,ub],xtol=1e-12,maxfev=20e3)
-    elif sequence == "echo":
+    elif sequence == "echo" or sequence=='cavity-reset' or sequence=='cavity-cooling':
         if x_vector[-1] < 10:
             tau = 2
             tau_ub = 20
@@ -377,13 +398,13 @@ def fit_data(x_vector,y_vector,sequence='rabi',dt=0.01,fitFunc='',verbose=0):
         fitFunction = decay
         # fitted_pars, covar = scy.optimize.curve_fit(, x_vector, y_vector,p0=p0,method='trf',bounds=[lb,ub],xtol=1e-12,maxfev=6000)
     
-    elif 'ringdown' in sequence:
+    elif sequence =='ringdown_off' or sequence=='ringdown_on':
         tau = 0.2
         amp = y_vector[0] - y_vector[-1]
         offset = y_vector[-1]
         p0 = [amp,tau,offset]
         fitFunction = decay
-    fitted_pars, covar = scy.optimize.curve_fit(fitFunction, x_vector, y_vector,p0=p0,method='trf',xtol=1e-12,maxfev=40e3)
+    fitted_pars, covar = scy.optimize.curve_fit(fitFunction, x_vector, y_vector,p0=p0,method='dogbox',xtol=1e-12,maxfev=40e3)
     error = np.sqrt(abs(np.diag(covar)))
 
     if verbose == 1:
@@ -401,14 +422,15 @@ def fit_data(x_vector,y_vector,sequence='rabi',dt=0.01,fitFunc='',verbose=0):
 
 
 #%% plot_data
-def plot_data(x_vector,y_vector,sequence='rabi',qubitDriveFreq=3.8e9,qb_power=1,
+def plot_data(x_vector,y_vector,sequence='rabi',qubitDriveFreq=3.8e9,qb_power=1,fflDriveFreq=2e9,
                               pi2Width=32,nAverages=1,
                               integration_length=2e-6,cav_resp_time=5e-6,stepSize=5e-6, iteration = 1,
                               Tmax=5e-6,measPeriod=5e-6,active_reset=False,
-                              fitted_pars=np.zeros(7),plot_mode=0,rr_IF=5e6,fitFunc='',savefig=True):
+                              fitted_pars=np.zeros(7),plot_mode=0,rr_IF=5e6,fitFunc='',savefig=True, amp=1, ffl_atten=0, rr_atten=0, flux=0, amp_ffl_scale=0, error=[0,0,0,0,0], ffl_len=0.):
 
     # x_vector = x_vector*1e3
     y_vector = y_vector*1e3
+    #power=10*np.log10((10**-3)*(mag**2)/50)
 
     if sequence == "p-rabi":
         fig, ax = plt.subplots()
@@ -417,18 +439,18 @@ def plot_data(x_vector,y_vector,sequence='rabi',qubitDriveFreq=3.8e9,qb_power=1,
         ax.set_xlabel('Pulse Amplitude Scaling')
         ax.plot(x_vector,rabi(x_vector, fitted_pars[0], fitted_pars[1], fitted_pars[2],fitted_pars[3]),'r')
         ax.set_title('Power Rabi Measurement %03d'%(iteration))
-        textstr = '$\omega_d$ = %.4f GHz\n$\hat{n}$ = %d'%(qubitDriveFreq*1e-9,nAverages)
+        textstr = '$\omega_d$ = %.4f GHz\n$\hat{n}$ = %d\n$rr atten$=%.1f db'%((qubitDriveFreq)*1e-9,nAverages, rr_atten)
 
-    elif sequence == "rabi":
+    elif sequence == "rabi" or sequence == "qubit_temp" or sequence == 'qb-reset':
         fig, ax = plt.subplots()
         ax.plot(x_vector*1e3, y_vector, '-o', markersize = 3, c='C0')
         ax.set_ylabel('Digitizer Voltage (mV)')
         ax.set_xlabel('Pulse Duration (ns)')
         ax.plot(x_vector*1e3,rabi(x_vector*1e3, fitted_pars[0], fitted_pars[1], fitted_pars[2],fitted_pars[3]),'r')
         ax.set_title('Rabi Measurement %03d'%(iteration))
-        textstr = '$\omega_d$ = %.4f GHz\n$P_{qb}$ = %.2f dBm\n$T_{\pi/2}$ = %.1f ns\n$\hat{n}$ = %d'%(qubitDriveFreq*1e-9,qb_power,round(fitted_pars[1]/4,1),nAverages)
+        textstr = '$\omega_d$ = %.4f GHz\n$P_{qb}$ = %.2f dBm\n$T_{\pi/2}$ = %.1f ns\n$\hat{n}$ = %d\n$rr atten$=%.1f db\n $contrast$=%.2f mV\n amp scale=%.4f'%(qubitDriveFreq*1e-9,qb_power,round(fitted_pars[1]/4,1),nAverages, rr_atten, fitted_pars[0], amp)
 
-    elif sequence == "ramsey":
+    elif sequence == "ramsey" or sequence == "cavity-cooling-ramsey" or sequence=="ramsey_chi":
 
         fig = plt.figure()
         ax1 = fig.add_subplot(111)
@@ -446,7 +468,7 @@ def plot_data(x_vector,y_vector,sequence='rabi',qubitDriveFreq=3.8e9,qb_power=1,
         else:
             ax1.plot(x_vector,ramsey(x_vector, fitted_pars[0], fitted_pars[1], fitted_pars[2],fitted_pars[3],fitted_pars[4]),'r',linewidth=linewidth)
         ax1.set_title('Ramsey %03d'%(iteration))
-        textstr = '$T_{\pi/2}$=%.3f ns\n$\omega_d$ = %.4f GHz\n$\Delta$ = %.2f MHz\n$T_2$ = %.3f $\mu$s\n$\hat{n}$ = %d'%(pi2Width,qubitDriveFreq*1e-9,fitted_pars[1],fitted_pars[3],nAverages)
+        textstr = '$T_{\pi/2}$=%.3f ns\n$\omega_d$ = %.4f GHz\n$\Delta$ = %.2f MHz\n$T_2$ = %.3f $\mu$s\n$\hat{n}$ = %d\n$T_2error$ = (%.2f)us \n $(ffl,rr) atten$=(%.1f, %.1f) db \n$flux$= %.3f mA\n$amp ffl scale$=%.2f\n$amp rr scale$=%.4f \n $\omega_{ffl}$=%.3f GHz'%(pi2Width,qubitDriveFreq*1e-9,fitted_pars[1],fitted_pars[3],nAverages, error[3], ffl_atten ,rr_atten, flux,amp_ffl_scale, amp, fflDriveFreq*1e-9)
 
     elif sequence == "echo":
 
@@ -456,20 +478,40 @@ def plot_data(x_vector,y_vector,sequence='rabi',qubitDriveFreq=3.8e9,qb_power=1,
         ax.set_ylabel('Digitizer Voltage (mV)')
         ax.set_xlabel('Pulse Separation ($\mu$s)')
         ax.plot(x_vector,decay(x_vector, fitted_pars[0], fitted_pars[1], fitted_pars[2]),'r')
-        textstr = '$T_{\pi/2}$=%.1f ns\n$\omega_d$ = %.4f GHz\n$A_d$ = %.2f V\n$T_2$=%.2f$\mu$s\n$\hat{n}$ = %d'%(pi2Width,qubitDriveFreq*1e-9,qb_power,fitted_pars[1],nAverages)
+        textstr = '$T_{\pi/2}$=%.1f ns\n$\omega_d$ = %.4f GHz\n$A_d$ = %.2f V\n$T_2$=%.2f$\mu$s\n$\hat{n}$ = %d\n$T_2error$ = %.2f us \n$flux$= %.3f mA'%(pi2Width,qubitDriveFreq*1e-9,qb_power,fitted_pars[1],nAverages,error[1], flux)
         ax.set_title('Echo Measurement %03d' %(iteration))
 
+    elif sequence=='cavity-reset':
 
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
+        ax.plot(x_vector, y_vector, '-o', markersize = 3, c='C0')
+        ax.set_ylabel('Digitizer Voltage (mV)')
+        ax.set_xlabel('Pulse Separation ($\mu$s)')
+        ax.plot(x_vector,decay(x_vector, fitted_pars[0], fitted_pars[1], fitted_pars[2]),'r')
+        textstr = '$T_{\pi/2}$=%.1f ns\n$\omega_d$ = %.4f GHz\n$A_d$ = %.2f V\n$T_2$=%.2f$\mu$s\n$\hat{n}$ = %d\n$T_2error$ = %.2f us \n$flux$= %.3f mA\n$amp ffl scale$=%.2f\n$amp rr scale$=%.2f \n$ffl len$=%d \n $\omega_{ffl}$=%.3f GHz \n$(ffl,rr) atten$=(%.1f, %.1f) db'%(pi2Width,qubitDriveFreq*1e-9,qb_power,fitted_pars[1],nAverages,error[1], flux,amp_ffl_scale, amp ,ffl_len, fflDriveFreq*1e-9, ffl_atten,rr_atten)
+        ax.set_title('Echo Measurement %03d' %(iteration))
+    
+    elif sequence=='cavity-cooling':
+
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
+        ax.plot(x_vector, y_vector, '-o', markersize = 3, c='C0')
+        ax.set_ylabel('Digitizer Voltage (mV)')
+        ax.set_xlabel('Pulse Separation ($\mu$s)')
+        ax.plot(x_vector,decay(x_vector, fitted_pars[0], fitted_pars[1], fitted_pars[2]),'r')
+        textstr = '$T_{\pi/2}$=%.1f ns\n$\omega_d$ = %.4f GHz\n$A_d$ = %.2f V\n$T_2$=%.2f$\mu$s\n$\hat{n}$ = %d\n$T_2error$ = %.2f us \n$flux$= %.3f mA\n$amp ffl scale$=%.2f\n$amp rr scale$=%.2f \n $\omega_{ffl}$=%.3f GHz \n$(ffl,rr) atten$=(%.1f, %.1f) db'%(pi2Width,qubitDriveFreq*1e-9,qb_power,fitted_pars[1],nAverages,error[1], flux,amp_ffl_scale, amp, fflDriveFreq*1e-9, ffl_atten,rr_atten)
+        ax.set_title('Echo Measurement %03d' %(iteration))
    
 
-    elif 'ringdown' in sequence:
+    elif sequence =='ringdown_off' or sequence=='ringdown_on' :
         fig = plt.figure()
         ax = fig.add_subplot(111)
         ax.plot(x_vector, y_vector, '-o', markersize = 3, c='C0')
         ax.set_ylabel('Digitizer Voltage (mV)')
         ax.set_xlabel('Delay ($\mu$s)')
         ax.plot(x_vector,decay(x_vector, fitted_pars[0], fitted_pars[1], fitted_pars[2]),'r')
-        textstr = '$\omega_d$ = %.4f GHz\n$T_{ringdown}$ = %.4f $\mu$s\n$\hat{n}$ = %d'%(qubitDriveFreq*1e-9,fitted_pars[1],nAverages)
+        textstr = '$\omega_d$ = %.4f GHz\n$T_{ringdown}$ = %.4f $\mu$s\n$\hat{n}$ = %d \n$flux$= %.3f mA\n$amp ffl scale$=%.2f \n$T_{ring}error$ = (%.2f)us\n$(ffl,rr) atten$=(%.1f, %.1f) db'%(qubitDriveFreq*1e-9,fitted_pars[1],nAverages, flux, amp_ffl_scale, error[1], ffl_atten,rr_atten)
         ax.set_title('resonator ring down %03d' %(iteration))
         
     elif sequence == "T1" or "dissT1":
@@ -479,7 +521,7 @@ def plot_data(x_vector,y_vector,sequence='rabi',qubitDriveFreq=3.8e9,qb_power=1,
         ax.set_ylabel('Digitizer Voltage (mV)')
         ax.set_xlabel('Delay ($\mu$s)')
         ax.plot(x_vector,decay(x_vector, fitted_pars[0], fitted_pars[1], fitted_pars[2]),'r')
-        textstr = '$T_{\pi/2}$=%.1f ns\n$\omega_d$ = %.4f GHz\n$T_1$ = %.3f $\mu$s\n$\hat{n}$ = %d'%(pi2Width,qubitDriveFreq*1e-9,fitted_pars[1],nAverages)
+        textstr = '$T_{\pi/2}$=%.1f ns\n$\omega_d$ = %.4f GHz\n$T_1$ = %.3f $\mu$s\n$\hat{n}$ = %d\n$amp ffl scale$=%.2f \n$(ffl,rr) atten$=(%.1f, %.1f) db \n$flux$= %.3f mA\n$T_1error$ = %.2f us'%(pi2Width,qubitDriveFreq*1e-9,fitted_pars[1],nAverages, amp_ffl_scale, ffl_atten, rr_atten,flux, error[1])
         ax.set_title('T1 Measurement %03d' %(iteration))
         
     plt.gcf().text(0.95, 0.15, textstr, fontsize=14)

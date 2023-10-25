@@ -23,8 +23,6 @@ import instrument_init as inst
 import h5py
 
 
-qb = qubit('diss07a')
-
 bOptimizeMixer = False
 bCalibratePi = False
 
@@ -102,7 +100,7 @@ def optimize_ffl_mixer(qb, sa, element):
     qb.opt_mixer(sa, cal='SB', freq_span = 1e6, reference = ref_H,amp_q=0.5, mode='intermediate', element =element)
     qb.opt_mixer(sa, cal='SB', freq_span = 1e6, reference = ref_L,amp_q=0.5, mode='fine',element =element)
 
-def measure_leakage_w_ffl(amp_r_scale=1,
+def measure_leakage_w_ffl(qb, amp_r_scale=1,
                     amp_ffl_scale=0.3,
                     tmin = 0,
                     tmax = 5e3,
@@ -114,7 +112,7 @@ def measure_leakage_w_ffl(amp_r_scale=1,
     dt = clk(dt)
     t_arr = np.arange(tmin, tmax + dt/2, dt, dtype = int)
     inst.turn_on_ffl_drive()
-    resettime_clk= clk(qb.pars['qubit_resettime']*2)
+    resettime_clk= clk(qb.pars['qubit_resettime'])
     with program() as prog:
         update_frequency('qubit', (qb.pars['qubit_freq']-qb.pars['qubit_LO']))
         update_frequency('ffl', (qb.pars['ffl_freq']-qb.pars['ffl_LO'])) 
@@ -124,12 +122,12 @@ def measure_leakage_w_ffl(amp_r_scale=1,
     
         with for_(n, 0, n < n_avg, n + 1):
             save(n, n_stream)
-            with for_(*from_array(t,t_arr)):
+            with for_each_(t, t_arr):
                 with if_(t==0):
                     #play('const'*amp(amp_ffl_scale), "ffl", duration=1e3)
                     #align("ffl", "rr")
                     measure("readout", "rr", None, *qb.res_demod(I, Q))
-                    wait(resettime_clk, "rr")
+                    wait(resettime_clk)
                     save(I, I_stream)
                     save(Q, Q_stream)
                 with else_():
@@ -137,7 +135,7 @@ def measure_leakage_w_ffl(amp_r_scale=1,
                     align("ffl", "rr")
                     #wait(t, "rr")
                     measure("readout", "rr", None, *qb.res_demod(I, Q))
-                    wait(resettime_clk, "rr")
+                    wait(resettime_clk)
                     save(I, I_stream)
                     save(Q, Q_stream)
     
@@ -154,7 +152,7 @@ def measure_leakage_w_ffl(amp_r_scale=1,
     
     fitted_pars, error = pf.fit_data(t_arr,ydata,sequence='T1',dt=t_arr[-1]*1e-6/len(t_arr))
     fig = pf.plot_data(t_arr,ydata,sequence='T1',fitted_pars=fitted_pars,nAverages=n_avg, pi2Width=qb.pars['pi_half_len'],
-                 qubitDriveFreq=qb.pars['qubit_LO']+qb.pars['qubit_IF'],qb_power = -8,iteration=1)
+                 qubitDriveFreq=qb.pars['qubit_LO']+qb.pars['qubit_IF'],qb_power = -8,iteration=1, amp_ffl_scale=amp_ffl_scale, flux=inst.get_ffl_bias(), ffl_atten=qb.pars['ffl_atten'], rr_atten=qb.pars['rr_atten'], error=error)
     dataDict = {'metadata': {'amp_r_scale': amp_r_scale,
                              'amp_ffl_scale': amp_ffl_scale,
                              'tmin': tmin,

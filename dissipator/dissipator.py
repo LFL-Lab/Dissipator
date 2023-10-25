@@ -18,8 +18,8 @@ class dissipator(qubit):
         self.device_name = device_name
         
     def optimize_mixer(self,sa, element='rr', cal='LO', switch='on'):
-        ref_H = 0
-        ref_L = -45
+        ref_H = -10
+        ref_L = -50
 
         self.play_pulses(element, switch=switch)
         if element == 'rr':
@@ -29,31 +29,48 @@ class dissipator(qubit):
             ref = ref_L
         else:
             ref = ref_H
-        qb_lo_leakage = self.get_power(sa, freq=self.pars[f'{element}_LO'],reference=ref,config=True,plot=True)
-        qb_im_leakage = self.get_power(sa, freq=self.pars[f'{element}_LO']-self.pars[f'{element}_IF'],reference=ref,config=True,plot=True)
-        qb_on_power = self.get_power(sa, freq=self.pars[f'{element}_LO']+self.pars[f'{element}_IF'],reference=ref, config=True,plot=True) # reference should be set ABOVE expected image power
+        if cal == 'LO':
+            fc = self.pars[f'{element}_LO']
+        elif cal == 'SB':
+            fc = self.pars[f'{element}_LO'] -  self.pars[f'{element}_IF']
+        print(f'Checking {element} {cal}')
+        qb_lo_leakage = self.get_power(sa, freq = fc, reference = -20, config = True, amp_q = 1, plot = False)
+        #qb_lo_leakage = self.get_power(sa, freq=self.pars[f'{element}_LO'],reference=ref,config=True,plot=True)
+        #qb_im_leakage = self.get_power(sa, freq=self.pars[f'{element}_LO']-self.pars[f'{element}_IF'],reference=ref,config=True,plot=True)
+        #qb_on_power = self.get_power(sa, freq=self.pars[f'{element}_LO']+self.pars[f'{element}_IF'],reference=ref, config=True,plot=True) # reference should be set ABOVE expected image power
         
-        if qb_lo_leakage > ref_L: 
-            self.opt_mixer(sa, cal=cal, freq_span = 1e6, reference = ref_H, mode='coarse', element = element, switch=switch)
-            # self.opt_mixer(sa, cal=cal, freq_span = 1e6, reference = ref_H, mode='coarse', element = element, switch=switch)
-            self.opt_mixer(sa, cal=cal, freq_span = 1e6, reference = ref_H, mode='intermediate', element = element, switch=switch)
-            # self.opt_mixer(sa, cal=cal, freq_span = 1e6, reference = ref_H, mode='intermediate', element = element, switch=switch)
-        if qb_lo_leakage < ref_L:
-            self.opt_mixer(sa, cal=cal, freq_span = 1e6, reference = ref_L, mode='coarse', element = element, switch=switch)
-            # self.opt_mixer(sa, cal=cal, freq_span = 1e6, reference = ref_L, mode='coarse', element = element, switch=switch)
-            self.opt_mixer(sa, cal=cal, freq_span = 1e6, reference = ref_L, mode='intermediate', element = element, switch=switch)
-            # self.opt_mixer(sa, cal=cal, freq_span = 1e6, reference = ref_L, mode='intermediate', element = element, switch=switch)
-        # self.opt_mixer(sa, cal=cal, freq_span = 1e6, reference = ref_L, mode='fine', element = element)
-        
+        j=0
+        while qb_lo_leakage > -75:
+                    leak0 = qb_lo_leakage
+                    print(f'Minimizing {element} {cal} leakage')
+                    if qb_lo_leakage > - 42:
+                        self.opt_mixer(sa,cal = cal, mode = 'coarse', amp_q = 1., element = element, reference = ref_H, switch='on', plot=False)
+                        ref=ref_H
+                    elif qb_lo_leakage < - 42 and qb_lo_leakage > - 58:
+                        self.opt_mixer(sa, cal = cal, mode = 'intermediate', amp_q = 1., element = element, reference = ref_H, switch='on',  plot=False)
+                        ref=ref_H
+                    elif qb_lo_leakage < - 58 and qb_lo_leakage > - 75:
+                        self.opt_mixer(sa, cal = cal, mode = 'fine', amp_q = 1., element = element, reference = ref_L, switch='on',  plot=False)
+                        ref=ref_L
+
+
+                    qb_lo_leakage = self.get_power(sa,freq = fc,reference = ref, amp_q = 1., config = True, plot = False)
+                    j+=1
+                    if j>3:
+                        if np.abs(qb_lo_leakage - leak0) < 2:
+                            print("Can't optimize mixer further")
+                            break
+                    if j==4:
+                        break
         self.write_pars()
         
     def mixer_powers(self, sa, element='rr', switch='on'):
-        ref_H = 0
+        ref_H = -20
         ref_L = -45
         self.play_pulses(element, switch=switch)
-        qb_lo_leakage = self.get_power(sa, freq=self.pars[f'{element}_LO'],reference=ref_H,config=True,plot=True)
-        qb_im_leakage = self.get_power(sa, freq=self.pars[f'{element}_LO']-self.pars[f'{element}_IF'],reference=ref_H,config=True,plot=True)
-        qb_on_power = self.get_power(sa, freq=self.pars[f'{element}_LO']+self.pars[f'{element}_IF'],reference=ref_H, config=True,plot=True) # reference should be set ABOVE expected image power
+        qb_lo_leakage = self.get_power(sa, freq=self.pars[f'{element}_LO'],reference=ref_H,config=True,plot=False)
+        qb_im_leakage = self.get_power(sa, freq=self.pars[f'{element}_LO']-self.pars[f'{element}_IF'],reference=ref_H,config=True,plot=False)
+        qb_on_power = self.get_power(sa, freq=self.pars[f'{element}_LO']+self.pars[f'{element}_IF'],reference=ref_H, config=True,plot=False) # reference should be set ABOVE expected image power
         print(f'{element}_lo_leakage = {qb_lo_leakage} dB')
         return {f'{element}_lo_leakage': qb_lo_leakage, 
                 f'{element}_im_leakage': qb_im_leakage,
@@ -92,9 +109,9 @@ class dissipator(qubit):
         self.update_value('ffl_IF', int(IF_max/2))
         if check_mixers:
             sa = inst.init_sa()
-            self.play_pulses(element='ffl')
-            self.optimize_mixer(sa, element='ffl',cal='LO')
-            self.optimize_mixer(sa, element='ffl',cal='SB')
+            self.play_pulses(element='ffl', switch='off')
+            self.optimize_mixer(sa, element='ffl',cal='LO', switch='off')
+            #self.optimize_mixer(sa, element='ffl',cal='SB',switch='off')
             sa_close_device(sa)
         resettime_clk = clk(self.pars['rr_resettime'])
         ### QUA code ###
@@ -171,9 +188,9 @@ class dissipator(qubit):
                           amp_ffl_scale=1,
                           plot = True,
                           savedata = True,
-                          bOptimizerrMixer = True,):
+                          bOptimizerrMixer = True, onoff = True):
         start = timeit.default_timer()
-        current = inst.get_flux_bias()
+        current = inst.get_ffl_bias()
         if bOptimizerrMixer:
             sa = inst.init_sa()
             self.play_pulses(element='rr')
@@ -181,9 +198,9 @@ class dissipator(qubit):
             self.optimize_mixer(sa, element='rr',cal='SB')
             sa_close_device(sa)
         # I, Q, freq, job = self.ffl_spec(f_LO = self.pars['ffl_LO'])
-        I, Q, freqs, job = self.resonator_spec(f_LO=self.pars['rr_LO'],atten=self.pars['rr_atten'],IF_min=63e6,IF_max=93e6,df=0.1e6,n_avg=1000,savedata=True)
-        fc,fwhm = pf.fit_res(freqs,np.abs(I+1j*Q))
-        self.update_value('rr_freq', fc)
+        #I, Q, freqs, job = self.resonator_spec(f_LO=self.pars['rr_LO'],atten=self.pars['rr_atten'],IF_min=192e6,IF_max=200e6,df=50e3,n_avg=3000,savedata=True)
+        #fc,fwhm = pf.fit_res(freqs,np.abs(I+1j*Q))
+        #self.update_value('rr_freq', fc)
         # I, Q, freq, job = self.run_scan(element='ffl',lo_min = 2.5e9, lo_max=3.5e9, chunksize=400e6, amp_q_scaling=0.9,n_avg = 1000)
         # I, Q, freq, job = self.ffl_spec_sweep_lo(n_avg = 100)
 
@@ -212,7 +229,7 @@ class dissipator(qubit):
             Q_st = declare_stream()
             n = declare(int)
             n_stream = declare_stream()
-            
+            update_frequency("ffl", self.pars["ffl_IF"])
             update_frequency("rr", self.pars['rr_freq'] - self.pars['rr_LO'])
             
             with for_(n, 0, n < n_avg, n + 1):
@@ -240,6 +257,7 @@ class dissipator(qubit):
             n_stream = declare_stream()
             
             update_frequency("rr", self.pars['rr_freq'] - self.pars['rr_LO'])
+            update_frequency("ffl", self.pars["ffl_IF"])
             
             with for_(n, 0, n < n_avg, n + 1):
                 wait(resettime_clk, "rr")
@@ -258,20 +276,25 @@ class dissipator(qubit):
 
         with tqdm(total=len(freqs), position=0, leave=True) as pbar:
             for i,freq in enumerate(freqs):
-                inst.turn_off_ffl_drive()
-                datadict,job = self.get_results(ffl_spec,result_names=["I","Q","n"],n_total=n_avg,progress_key = "n",showprogress=False)
+                if onoff:
+                    inst.turn_off_ffl_drive()
+                    datadict,job = self.get_results(ffl_spec,result_names=["I","Q","n"],n_total=n_avg,progress_key = "n",showprogress=False)
     
-                I_b = np.array(datadict["I"])[0]
-                Q_b = np.array(datadict["Q"])[0]
+                    I_b = np.array(datadict["I"])[0]
+                    Q_b = np.array(datadict["Q"])[0]
                 self.update_value('ffl_LO', freq)
                 inst.set_ffl_LO(freq, bprint=False)
                 datadict,job = self.get_results(ffl_spec,result_names=["I","Q","n"],n_total=n_avg,progress_key = "n",showprogress=False)
-    
                 I_tot = np.array(datadict["I"])[0]
                 Q_tot = np.array(datadict["Q"])[0]
-    
-                Idata[i] = float(I_tot - I_b)
-                Qdata[i] = float(Q_tot - Q_b)
+                
+                if onoff:
+                    Idata[i] = float(I_tot - I_b)
+                    Qdata[i] = float(Q_tot - Q_b)
+                
+                else:
+                    Idata[i] = float(I_tot)
+                    Qdata[i] = float(Q_tot)
                 
                 
         if plot:

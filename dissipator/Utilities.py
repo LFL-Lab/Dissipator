@@ -49,10 +49,10 @@ def round_from_uncertainty(num, unc, scale = 1):
     return scaled_num * scale
 
 def save_datadict_to_fgroup(f, name, datadict):
-    subgroup = f.create_group(name)
+    subgroup = f.create_group(name, track_order=True)
     for key in datadict.keys():
         if key != 'metadata':
-            dset_q = subgroup.create_dataset(key, data=datadict[key])
+            dset_q = subgroup.create_dataset(key, data=datadict[key], track_order=True)
    
         else:
             for k in datadict['metadata'].keys():

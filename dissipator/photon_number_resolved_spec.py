@@ -62,28 +62,25 @@ inst.set_attenuator(qb.pars['rr_atten'])
 
 if not os.path.exists(saveDir):
     Path(saveDir).mkdir(parents=True, exist_ok=True)
-rr_atten = 24
+rr_atten = 33
 qb.update_value('rr_atten', rr_atten)
-n_avg = 50000
+n_avg = 3000
 filename = f'photonNumResSpec_DA={rr_atten}dB_navg={n_avg}'
 iteration = get_index_for_filename(saveDir, filename)
 with h5py.File(f'{saveDir}\\{filename}_{iteration}.h5','w') as hf:
     now = datetime.now()
     timestamp = now.strftime("%H:%M:%S")
     g_on = hf.create_group(f'rr_atten = {rr_atten}')
-    # amps = [0.001,0.01,0.3,0.5,0.8]
-    amps = [0.0004]
+    amps = [0.01,0.1,0.35,0.65,0.95]
     for amp in amps:
-        qb.qubit_spec(f_LO=4.60e9,
+        qb.qubit_spec(f_LO=4.1e9,
                       amp_q_scaling=amp,
-                      IF_min=30e6,
-                      IF_max=40e6,
-                      df=10e3,
-                      n_avg=int(n_avg),
+                      IF_min=0,
+                      IF_max=200e6,
+                      df=200e3,
+                      n_avg=3000,
                       on_off=True,
                       showprogress=True,
                       savedata=True,
-                      saveto = {'file':g_on,
-                                'name': f'spec_drive = {amp:.4f}'},
                       check_mixers=False,
                       )
