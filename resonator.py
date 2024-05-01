@@ -286,6 +286,7 @@ class Resonator(circlefit, save_load, plotting, calibration):
         else:
             absQc = Ql/(2*r0)
             Qc = Ql/(2*r0*cosphi)
+            print(r0)
             Qi = Ql/(1-2*r0*cosphi)
         #print('Qi: {:.1f}'.format(Qi))
 
