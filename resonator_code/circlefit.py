@@ -23,7 +23,7 @@ class circlefit(object):
 
     def _dist(self,x):
         np.absolute(x,x)
-        c = (x > np.pi).astype(np.int)
+        c = (x > np.pi).astype(int)
         return x+c*(-2.*x+2.*np.pi)
 
     def _periodic_boundary(self,x,bound):
@@ -69,10 +69,10 @@ class circlefit(object):
         Ql, fr = p_final[0]
         p0 = fr
         p_final = spopt.leastsq(lambda a,b,c: residuals_3(a,b,c,theta0,Ql),p0,args=(f_data,phase),maxfev=20000)#,ftol=1e-12,xtol=1e-12)
-        fr = p_final[0]
+        fr = p_final[0][0]
         p0 = Ql
         p_final = spopt.leastsq(lambda a,b,c: residuals_4(a,b,c,theta0,fr),p0,args=(f_data,phase),maxfev=20000)#,ftol=1e-12,xtol=1e-12)
-        Ql = p_final[0]
+        Ql = p_final[0][0]
         p0 = np.array([theta0, Ql, fr], dtype='float64')
         p_final = spopt.leastsq(residuals_5,p0,args=(f_data,phase),maxfev=20000)
         return p_final[0]

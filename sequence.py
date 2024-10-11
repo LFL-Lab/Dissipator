@@ -32,8 +32,8 @@ class sequence():
     # def make_sequence(self, qb, tmin = 16, tmax=1e3, dt=8, scrambling_amp=0., ffl_len=2e3, saturation_dur=2e3, with_ffl='True', with_scram='True', detuning=0):
         
 
-    def make_resonator_spec_sequence(self):
-        
+    def single_tone_spectroscopy(self):
+        """Single tone spectroscopy sequence for linear resonators"""
         n_avg = self.qb_pars['n_avg']
         IF_min = self.seq_pars['IF_min']
         IF_max = self.seq_pars['IF_max']
@@ -61,7 +61,7 @@ class sequence():
                     assign(phase_shift, Cast.mul_fixed_by_int(phase_prefactor, (df>>6)))
                     frame_rotation_2pi(phase_shift,'rr')
                     wait(res_ringdown_time, "rr")
-                    measure("readout", "rr", None,*res_demod(I, Q,switch_weights=False))
+                    measure("readout", "rr", None,*res_demod(I, Q,switch_weights=self.qb_pars['switch_weights']))
                     save(I, I_st)
                     save(Q, Q_st)
 
@@ -73,44 +73,49 @@ class sequence():
 
         return prog
                     
-    def make_qubit_spec_sequence(self,):
+    def two_tone_spectroscopy(self,):
+        """Two tone resonator spectroscopy with power sweep. Can be used for qubit or photon-resolved resonator spectroscopy"""
         n_avg = self.qb_pars['n_avg']
-        IF_min = self.seq_pars['IF_min']
-        IF_max = self.seq_pars['IF_max']
-        df = self.seq_pars['df']
-        qubit_amp = self.seq_pars['amp_q_scaling']
+        freqs = np.arange(self.seq_pars['IF_min'], self.seq_pars['IF_max'] + self.seq_pars['df']/2, self.seq_pars['df'], dtype=int)
+        target_elem = self.seq_pars['target_res'] # the resonator to be probed, choices are 'qubit', 'rr' or 'cavity'
+        readout_elem = self.seq_pars['readout_res'] # the resonator to be readout, choices are 'rr' or 'cavity' or 'qubit'
+        
+        print(f"Performing two-tone pulsed spectroscopy on {target_elem} using {readout_elem} for readout")
+        a = self.seq_pars['amp_q_scaling']
         saturation_dur = self.seq_pars['saturation_dur']
+        
         on_off = self.seq_pars['on_off']
         # amp_ffl_scale = self.exp_dict['amp_ffl_scale']
-        freqs = np.arange(IF_min, IF_max + df/2, df, dtype=int)
-        qubit_reset_time = self.qb_pars['resettime']['qubit']
-        rr_reset_time = self.qb_pars['resettime']['rr']
+        reset_time_target = self.qb_pars['resettime'][target_elem]
+        reset_time_readout = self.qb_pars['resettime'][readout_elem]
+        print(f"Reset time for {target_elem} is {reset_time_target} and for {readout_elem} is {reset_time_readout}")
 
         with program() as prog:
             # update_frequency('rr', self.qb_pars['rr_IF'])
-            n, I, Q = declare_vars([int, fixed, fixed])
+            n, I, Q, f = declare_vars([int, fixed, fixed, int])
             I_stream, Q_stream, n_stream = declare_streams(stream_num=3)
             if on_off:
                 I_b, Q_b, I_tot,Q_tot = declare_vars([fixed,fixed, fixed, fixed])
-
-            f = declare(int)
             
+        
             with for_(n, 0, n < n_avg, n + 1):
                 save(n, n_stream)
                 with for_(*from_array(f, freqs)):
-                    update_frequency("qubit", f)
+                    update_frequency(target_elem, f)
                     # measure background
                     if on_off:
-                        measure("readout", "rr", None, *res_demod(I_b, Q_b,switch_weights=True))
-                        wait(rr_reset_time, "rr")
-                        align("rr", "qubit") # wait for operations on resonator to finish before playing qubit pulse
+                        measure("readout", readout_elem, None, *res_demod(I_b, Q_b,switch_weights=self.qb_pars['switch_weights']))
+                        align(readout_elem, target_elem) # wait for operations on readout resonator to finish before playing qubit pulse
+                        wait(reset_time_readout, readout_elem)
+                        align(readout_elem, target_elem)
 
-                    play('const'*amp(qubit_amp), "qubit", duration=saturation_dur)
-                    align("qubit", "rr")
-                    measure("readout", "rr", None, *res_demod(I, Q,switch_weights=True))
-                    wait(qubit_reset_time,'qubit')
+                    play('const'*amp(a), target_elem, duration=saturation_dur)
+                    align(target_elem, readout_elem)
+                    measure("readout", readout_elem, None, *res_demod(I, Q,switch_weights=self.qb_pars['switch_weights']))
+                    wait(reset_time_target,target_elem)
+             
                     if on_off:
-                        assign(I_tot, I - I_b)
+                        assign(I_tot, I - I_b) 
                         assign(Q_tot, Q - Q_b)
                         save(I_tot, I_stream)
                         save(Q_tot, Q_stream)
@@ -125,88 +130,185 @@ class sequence():
 
         return prog
     
-    def make_power_rabi_sequence(self,):
+    def two_tone_spectroscopy_amp_sweep(self,):
+        """Two tone resonator spectroscopy with power sweep. Can be used for qubit or photon-resolved resonator spectroscopy"""
+        n_avg = self.qb_pars['n_avg']
+        freqs = np.arange(self.seq_pars['IF_min'], self.seq_pars['IF_max'] + self.seq_pars['df']/2, self.seq_pars['df'], dtype=int)
+        target_elem = self.seq_pars['target_res'] # the resonator to be probed, choices are 'qubit', 'rr' or 'cavity'
+        readout_elem = self.seq_pars['readout_res'] # the resonator to be readout, choices are 'rr' or 'cavity' or 'qubit'
+        amp_arr = np.arange(self.seq_pars['amin'], self.seq_pars['amax'] + self.seq_pars['da']/2, self.seq_pars['da'], dtype=float)
+        print(amp_arr)
+        qubit_amp = self.seq_pars['amp_q_scaling']
+        saturation_dur = self.seq_pars['saturation_dur']
+        on_off = self.seq_pars['on_off']
+        # amp_ffl_scale = self.exp_dict['amp_ffl_scale']
+        reset_time = self.qb_pars['resettime'][target_elem]
 
+        with program() as prog:
+            # update_frequency('rr', self.qb_pars['rr_IF'])
+            n, I, Q = declare_vars([int, fixed, fixed])
+            I_stream, Q_stream, n_stream = declare_streams(stream_num=3)
+            if on_off:
+                I_b, Q_b, I_tot,Q_tot = declare_vars([fixed,fixed, fixed, fixed])
+            f,a = declare_vars([int,fixed])
+
+            with for_(*from_array(a,amp_arr)):
+                with for_(n, 0, n < n_avg, n + 1):
+                    save(n, n_stream)
+                    with for_(*from_array(f, freqs)):
+                        update_frequency(target_elem, f)
+                        # measure background
+                        if on_off:
+                            measure("readout", readout_elem, None, *res_demod(I_b, Q_b,switch_weights=self.qb_pars['switch_weights']))
+                            wait(reset_time, target_elem)
+                            align(readout_elem, target_elem) # wait for operations on readout resonator to finish before playing qubit pulse
+
+                        play('const'*amp(a), target_elem, duration=saturation_dur)
+                        align(target_elem, readout_elem)
+                        measure("readout", readout_elem, None, *res_demod(I, Q,switch_weights=self.qb_pars['switch_weights']))
+                        wait(reset_time,target_elem)
+
+                        if on_off:
+                            assign(I_tot, I - I_b) 
+                            assign(Q_tot, Q - Q_b)
+                            save(I_tot, I_stream)
+                            save(Q_tot, Q_stream)
+                        else:
+                            save(I, I_stream)
+                            save(Q, Q_stream)
+            
+                with stream_processing():
+                    I_stream.buffer(len(freqs)).average().save('I')
+                    Q_stream.buffer(len(freqs)).average().save('Q')
+                    n_stream.save('n')
+
+        return prog
+    
+    def power_rabi(self,):
+        amin = self.seq_pars['amin']
+        amax = self.seq_pars['amax']
+        da = self.seq_pars['da']
+        amp_arr = np.arange(amin, amax + da/2, da, dtype=float)
+        resettime_clk= self.qb_pars['resettime']['qubit']
+        n_avg = self.qb_pars['n_avg']
+        amp_r_scale = self.qb_pars['amp_r_scale']
+        # amp_ffl_scale = self.qb_pars['amp_ffl_scale']
+        rr_IF = self.qb_pars['rr_IF']
+        # ffl_IF = self.qb_pars['ffl_IF']
+        with program() as prog:
+            update_frequency('rr', rr_IF) 
+            # update_frequency('ffl', ffl_IF) 
+            n, a, I, Q = declare_vars([int, fixed, fixed, fixed])
         
+            I_stream, Q_stream, n_stream = declare_streams(stream_num=3)
+            
+            with for_(n, 0, n < n_avg, n + 1):
+                save(n, n_stream)
+                with for_(*from_array(a, amp_arr)):
+                    play("gauss"*amp(a), "qubit")
+                    align("qubit","rr")
+                    measure("readout", "rr", None, *res_demod(I, Q, switch_weights=self.qb_pars['switch_weights'])) 
+                    wait(resettime_clk, "qubit")
+                    save(I, I_stream)
+                    save(Q, Q_stream)
         
-            # if self.name == 'ringdown_drive_on':
-            # tmin = clk(tmin)
-            # tmax = clk(tmax)
-            # dt = clk(dt)
-            # t_arr = np.arange(tmin, tmax + dt/2, dt, dtype = int)
-            # resettime_clk= clk(qb.pars['rr_resettime'])
-            # n_avg = self.exp_dict['n_avg']
-            # amp_r_scale = self.exp_dict['amp_r_scale']
-            # amp_ffl_scale = self.exp_dict['amp_ffl_scale']
-            # rr_IF = qb.pars['rr_IF']
-            # ffl_IF = qb.pars['ffl_IF']
-            # with program() as prog:
-            #     update_frequency('rr', rr_IF) 
-            #     update_frequency('ffl', ffl_IF) 
-            #     n, t, I, Q = qb.declare_vars([int, int, fixed, fixed])
+            with stream_processing():
+                I_stream.buffer(len(amp_arr)).average().save("I")
+                Q_stream.buffer(len(amp_arr)).average().save("Q")
+                n_stream.save('n')   
+
+        return prog
+    
+
+    def ramsey(self,):
+        tmin = self.seq_pars['tmin']
+        tmax = self.seq_pars['tmax']
+        dt = self.seq_pars['dt']
+        t_arr = np.arange(tmin, tmax + dt/2, dt, dtype=float)
+        resettime_clk= self.qb_pars['resettime']['qubit']
+        n_avg = self.qb_pars['n_avg']
+        amp_r_scale = self.qb_pars['amp_r_scale']
+        # amp_ffl_scale = self.qb_pars['amp_ffl_scale']
+        rr_IF = self.qb_pars['rr_IF']
+        # ffl_IF = self.qb_pars['ffl_IF']
+        with program() as prog:
+            update_frequency('rr', rr_IF) 
+            # update_frequency('ffl', ffl_IF) 
+            n, a, I, Q = declare_vars([int, fixed, fixed, fixed])
+        
+            I_stream, Q_stream, n_stream = declare_streams(stream_num=3)
             
-            #     I_stream, Q_stream, n_stream = qb.declare_streams(stream_num=3)
-                
-            #     with for_(n, 0, n < n_avg, n + 1):
-            #         save(n, n_stream)
-            #         with for_each_(t, t_arr):
-            #             with if_(t==0):
-            #                 play("readout"*amp(amp_r_scale), "rr")
-            #                 measure("void", "rr", None,*qb.res_demod(I,Q))
-            #                 wait(resettime_clk, "rr")
-            #                 save(I, I_stream)
-            #                 save(Q, Q_stream)
-            #             with else_():
-            #                 play("readout"*amp(amp_r_scale), "rr")
-            #                 align("ffl", "rr")
-            #                 play('gaussian'*amp(amp_ffl_scale), "ffl", duration=t)
-            #                 align("ffl", "rr")
-            #                 measure("void", "rr", None,*qb.res_demod(I,Q))
-            #                 wait(resettime_clk, "rr")
-            #                 save(I, I_stream)
-            #                 save(Q, Q_stream)
-            
-            #     with stream_processing():
-            #         I_stream.buffer(len(t_arr)).average().save("I")
-            #         Q_stream.buffer(len(t_arr)).average().save("Q")
-            #         n_stream.save('n')   
-        # elif self.name =='spec_wffl':
-        #     resettime_clk= clk(qb.pars['qubit_resettime'])
-        #     n_avg = self.exp_dict['n_avg']
-        #     IF_min = self.exp_dict['IF_min']
-        #     IF_max = self.exp_dict['IF_max']
-        #     df = self.exp_dict['df']
-        #     amp_ffl_scale = self.exp_dict['amp_ffl_scale']
-        #     freqs = np.arange(IF_min, IF_max + df/2, df, dtype=int)
-        #     rr_pulse_len_in_clk = qb.pars['rr_pulse_len_in_clk']
-        #     with program() as prog:
-        #         update_frequency('rr', qb.pars['rr_IF'])
-        #         update_frequency('qubit', (qb.pars['qubit_freq']-qb.pars['qubit_LO']))
-        #         update_frequency('ffl', (qb.pars['ffl_freq']-qb.pars['ffl_LO'])) 
-        #         n, I, Q = qb.declare_vars([int, fixed, fixed])
-                
-        #         I_stream, Q_stream, n_stream = qb.declare_streams(stream_num=3)
-        #         f = declare(int)
-                
-        #         with for_(n, 0, n < n_avg, n + 1):
-        #             save(n, n_stream)
-        #             with for_(f, IF_min, f < IF_max + df/2, f + df):
-        #                 update_frequency("rr", f)
-        #                 wait(resettime_clk, "rr")
-        #                 #align("qubit","rr")
-        #                 #play("pi", "qubit")
-        #                 align("ffl", "rr")
-        #                 play('const'*amp(amp_ffl_scale), "ffl", duration=9000)
-        #                 align("ffl", "rr")
-        #                 measure("readout", "rr", None, *qb.res_demod(I, Q))
-                        
-        #                 save(I, I_stream)
-        #                 save(Q, Q_stream)
-            
-        #         with stream_processing():
-        #             I_stream.buffer(len(freqs)).average().save('I')
-        #             Q_stream.buffer(len(freqs)).average().save('Q')
-        #             n_stream.save('n')
+            with for_(n, 0, n < n_avg, n + 1):
+                save(n, n_stream)
+                with for_(*from_array(t, t_arr)):
+                    play("X90", "qubit")
+                    wait(t, "qubit")
+                    play("X90", "qubit")
+                    align("qubit","rr")
+                    measure("readout", "rr", None, *res_demod(I, Q))
+                    wait(resettime_clk, "qubit")
+                    save(I, I_stream)
+                    save(Q, Q_stream)
+        
+            with stream_processing():
+                I_stream.buffer(len(t_arr)).average().save("I")
+                Q_stream.buffer(len(t_arr)).average().save("Q")
+                n_stream.save('n')   
+
+        return prog
+    
+    def wigner_tomography(self,):
+        n_avg = self.qb_pars['n_avg']
+        n_points = self.seq_pars['n_points']
+        cavity_element = self.qb_pars['cavity_element']
+        revival_time = self.qb_pars['revival_time']
+        reset_time = self.qb_pars['resettime'][cavity_element]
+        alpha = np.linspace(-2, 2, n_points)
+        amp_dis = list(-alpha / np.sqrt(2 * np.pi) / 4)
+        # ground = declare(int)
+        # excited = declare(int)
+        with program() as prog:
+            n, r, i, I, Q = declare_vars([int, int, int, fixed, fixed, fixed])
+            I_stream, Q_stream, n_stream = declare_streams(stream_num=3)
+            amp_dis = declare(fixed, value=amp_displace)
+            ground_st = declare_stream()
+            excited_st = declare_stream()
+
+            with for_(r, 0, r < n_points, r + 1):
+                with for_(i, 0, i < n_points, i + 1):
+                    assign(ground, 0)
+                    assign(excited, 0)
+                    with for_(n, 0, n < n_avg, n + 1):
+                        # Displace the cavity
+                        play("displace" * amp(amp_dis[r], 0, 0, amp_dis[i]), cavity_element)
+                        align(cavity_element, "qubit")
+                        # The Ramsey sequence with idle time set to pi / chi
+                        play("x90", "qubit")
+                        wait(revival_time, "qubit")
+                        play("x90", "qubit")
+                        # Readout the resonator
+                        align("qubit", "resonator")
+                        measure(
+                            "readout",
+                            "resonator",
+                            None,
+                            dual_demod.full("cos", "out1", "sin", "out2", I),
+                            dual_demod.full("minus_sin", "out1", "cos", "out2", Q),
+                        )
+                        # Single shot detection and ground/excited state assignment
+                        # with if_(I < threshold):
+                        #     assign(ground, ground + 1)
+                        # with else_():
+                        #     assign(excited, excited + 1)
+                        # wait and let all elements relax
+                        wait(reset_time, cavity_element, "qubit", "resonator")
+                    save(I, I_st)
+                    save(Q, Q_st)
+
+        with stream_processing():
+            ground_st.buffer(n_points, n_points).save("ground")
+            excited_st.buffer(n_points, n_points).save("excited")
+
 
         # def make_qubit_reset_sequence():
         #     ##start with a scrambling pulse of length saturation_dur and amplitude scrambling amp on the qubit and then play (or dont play) ffl pulse for length ffl_len and then do rabi.

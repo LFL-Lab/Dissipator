@@ -17,24 +17,33 @@ class instruments():
 
     # default settings for interfacing with instrument server
     default_settings =  {   
-                'readout_LO' : 
+                # 'readout_LO' : 
+                #     {
+                #     'instrument' : 'BNC 845 Signal Generator',
+                #     'frequency' : 'Frequency',
+                #     'output' : 'Output',
+                #     'Labber_kwargs' :{'name': 'readout LO', 'At Startup': 'Get config', 'Interface':'Other', 'Address':'USB0::0x03EB::0xAFFF::621-03A100000-0519::0::INSTR'}
+                #     },
+
+                'readout_LO' :
                     {
-                    'instrument' : 'BNC 845 Signal Generator',
+                    'instrument' : 'SignalCore SC5511A Signal Generator',
                     'frequency' : 'Frequency',
-                    'output' : 'Output',
-                    'Labber_kwargs' :{'name': 'readout LO', 'At Startup': 'Get config', 'Interface':'Other', 'Address':'USB0::0x03EB::0xAFFF::621-03A100000-0520::0::INSTR'}
+                    'output' : 'Output status',
+                    'power': 'Power',
+                    'Labber_kwargs' : {'name' : '10002A06',
+                                       'interface' : 'USB',}
                     },
 
                 'qubit_LO' :
                     {
-                    'instrument' : 'SignalCore SC5506A Signal Generator',
-                    'frequency' : 'RF1 frequency',
-                    'output' : 'RF1 output status',
-                    'power': 'RF1 power level',
-                    'Labber_kwargs' : {'name' : '10002A08',
+                    'instrument' : 'SignalCore SC5511A Signal Generator',
+                    'frequency' : 'Frequency',
+                    'output' : 'Output status',
+                    'power': 'Power',
+                    'Labber_kwargs' : {'name' : '10002F25',
                                        'interface' : 'USB',}
                     },
-
                 # 'Keithley' : 
                 #     {
                 #     'instrument' : 'Keithley 2400 SourceMeter',
@@ -53,7 +62,7 @@ class instruments():
                     'Labber_kwargs' :   {
                                         'name' : 'readout attenuator',
                                         'interface' : 'usb',
-                                        'address' : '24680'
+                                        'address' : '24679'
                                         }
                     }, 
 
@@ -138,7 +147,7 @@ class instruments():
     def add_instrument(self, instrument_name, instrument_setting,
                         values = {}, 
                         verbose = True):
-
+        
         # get settings
         Labber_name = instrument_setting['instrument']
         Labber_kwargs = instrument_setting['Labber_kwargs']

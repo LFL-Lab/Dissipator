@@ -149,7 +149,7 @@ class Resonator(circlefit, save_load, plotting, calibration):
 
         # fit the circle in complex plane
         xc, yc, r0 = self._fit_circle(z_data)
-        zc = np.complex(xc,yc)
+        zc = complex(xc,yc)
 
         # center the circle at the complex origin
         z_data_center = self._center(z_data,zc)
@@ -162,7 +162,7 @@ class Resonator(circlefit, save_load, plotting, calibration):
         beta = self._periodic_boundary(theta+np.pi,np.pi)
 
         # construct the off resonant point from circle center/radius and angle beta
-        self.offrespoint = np.complex((xc+r0*np.cos(beta)),(yc+r0*np.sin(beta)))
+        self.offrespoint = complex((xc+r0*np.cos(beta)),(yc+r0*np.sin(beta)))
 
         # alpha is the phase of offresonant point. it's the angle you must rotate the data so off resonance is purely real.
         self.alpha = np.angle(self.offrespoint) if self.port_type == 'N' else self._periodic_boundary(
@@ -259,7 +259,7 @@ class Resonator(circlefit, save_load, plotting, calibration):
 
         # estimate the phase offset as supplement to impdance mismatch, assuming that the circle will be centered at origin
         theta0 = self._periodic_boundary(self.phi0+np.pi,np.pi)
-        z_data_center = self._center(self.z_data,np.complex(xc,yc))
+        z_data_center = self._center(self.z_data,complex(xc,yc))
 
         # iteratively fit the phase of centered data
         theta0, Ql, fr = self._phase_fit(self.f_data,z_data_center,theta0,self.Q_est,self.f0_est)
@@ -405,7 +405,7 @@ class Resonator(circlefit, save_load, plotting, calibration):
         xc,yc,r0 = self._fit_circle(z_data[fit_id])
 
         # center data for phase fit
-        z_data_center = self._center(z_data,np.complex(xc,yc))
+        z_data_center = self._center(z_data,complex(xc,yc))
 
 
         # get Q and f0 from phase fit
@@ -415,7 +415,7 @@ class Resonator(circlefit, save_load, plotting, calibration):
         # let's make the 'calibrated data' just have electrical delay removed, and rotated such that resonance
         # lies on real axis. It's important to note that we cannot do anything to normalize the magnitude. There
         # is no reference which we can normalize to.
-        self.alpha = np.angle(np.complex(xc+r0*np.cos(theta),yc+r0*np.sin(theta)))
+        self.alpha = np.angle(complex(xc+r0*np.cos(theta),yc+r0*np.sin(theta)))
         self.z_data = z_data*np.exp(-1j*self.alpha)
 
 
@@ -504,13 +504,13 @@ class Resonator(circlefit, save_load, plotting, calibration):
         '''
         full model for direct reflection type resonances
         '''
-        return a*np.exp(np.complex(0,alpha))*np.exp(-2j*np.pi*f*delay) * ( 2.*Ql/Qc - 1. + 2j*Ql*(fr-f)/fr ) / ( 1. - 2j*Ql*(fr-f)/fr )
+        return a*np.exp(complex(0,alpha))*np.exp(-2j*np.pi*f*delay) * ( 2.*Ql/Qc - 1. + 2j*Ql*(fr-f)/fr ) / ( 1. - 2j*Ql*(fr-f)/fr )
 
     def _S21_notch(self,f,fr=10e9,Ql=900,Qc=1000.,phi=0.,a=1.,alpha=0.,delay=.0):
         '''
         full model for notch type resonances
         '''
-        return a*np.exp(np.complex(0,alpha))*np.exp(-2j*np.pi*f*delay)*(1.-Ql/Qc*np.exp(1j*phi)/(1.+2j*Ql*(f-fr)/fr))
+        return a*np.exp(complex(0,alpha))*np.exp(-2j*np.pi*f*delay)*(1.-Ql/Qc*np.exp(1j*phi)/(1.+2j*Ql*(f-fr)/fr))
 
     def _S21_sqr(self,f,fr=10e9,Ql=1000,A=1):
         '''

@@ -34,7 +34,7 @@ from config import Configuration
 from collections import OrderedDict
 
 logger.setLevel(level='WARNING')
-device = 'darpa3A'
+# device = 'darpa3A'
 today = date.today()
 sDate =  today.strftime("%Y%m%d")
 
@@ -45,33 +45,35 @@ class qubit():
     #%%% default_pars
     default_pars = {
                     # overall setup parameters
-                    'elements' :                    ['qubit', 'rr'],
-                    "qubit_LO":                     5e9,
-                    "rr_LO":                        6e9,
+                    'elements' :                    ['qubit', 'rr','cavity'],
                     'readout_atten':                25,         # default attenuation in dB on variable attenuator
 
                     #OPX settings and connections
                     'host':                         None,       # OPX IP address (eventually, import from local file)
                     'port':                         '9510',       # OPX port (eventually, import from local file)
-                    'Iout':                         {'qubit': 3, 'rr': 1},          # OPX output (goes to modulation mixer input I)
-                    'Qout':                         {'qubit': 4, 'rr': 2},          # OPX output (goes to modulation mixer input Q)
+                    'Iout':                         {'qubit': 3, 'rr': 1, 'cavity': 5},          # OPX output (goes to modulation mixer input I)
+                    'Qout':                         {'qubit': 4, 'rr': 2, 'cavity': 6},          # OPX output (goes to modulation mixer input Q)
                     'Iin':                          1,          # OPX input (comes from demodulation mixer output I)
                     'Qin':                          2,          # OPX input (comes from demodulation mixer output Q)
-                    'AWG_trigger_out' :                     1,          # OPX digital marker output port for triggering AWG
+                    'AWG_trigger_out' :             1,          # OPX digital marker output port for triggering AWG
                     'controller':                   'con2',     # OPX controller name
 
                     # Instrument settings (except OPX)
                     "qubit_LO":                     int(4.48e9),
                     "rr_LO":                        int(6.42e9),
+                    "cavity_LO":                    int(3.5e9),
                     "readout_atten":                25,
 
                     # other measurement setup choices
                     'n_avg':                        100,        # number of averages for zero-deadtime measurement
                     'rr_IF':                        50e6,
                     'qubit_IF':                     50e6,
+                    'cavity_IF':                    50e6,
                     "gauss_len":                    48,
                     "gauss_amp":                    0.45,
-                    "amp_r":                        0.45,
+                    "displace_amp":                 0.45,
+                    "displace_len":                 48,
+                    "amp_r":                        0.4,
                     "readout_pulse_len_in_clk":     500,        # length of readout integration weights in clock cycles
                     "saturation_duration" :         clk(10e3),  # saturation duration for spectroscopy
                     'readout_length':                  2000,  # length of a normal readout in ns,
@@ -79,14 +81,17 @@ class qubit():
                     # qubit parameters
                     "qubit_freq":                   int(4.5129e9),
                     "rr_freq":                      int(6.2e9),
+                    "cavity_freq":                  int(3.55e9),
 
                     # calibrated setup parameters
                     "analog_input_offsets":         [0,0],
                     "analog_input_gain":           3,
-                    "rr_mixer_offsets":            [0,0],
                     "qubit_mixer_offsets":          [0,0],
-                    "rr_mixer_imbalance":          [0,0],
                     "qubit_mixer_imbalance":        [0,0],
+                    "rr_mixer_offsets":            [0,0],
+                    "rr_mixer_imbalance":          [0,0],
+                    "cavity_mixer_offsets":         [0,0],
+                    "cavity_mixer_imbalance":       [0,0],
                     "tof":                         260,       # time of flight in ns
                     "smearing":                    40,         # smearing in ns
                     # processing choices
@@ -95,22 +100,23 @@ class qubit():
                     "switch_weights" :              False,
 
                     # calibrated device parameters
-                    "resettime" :                   {"qubit": clk(100e3), "rr" : clk(5e3)},
+                    "resettime" :                   {"qubit": clk(100e3), "rr" : clk(5e3), 'cavity': clk(100e3)},
                     'kappa':                        200e3,      # resonator linewidth
                     'readout_freq':                     6.2e9,        # resonator center frequency
                     'Q':                            9000,       # resonator quality factor
                     'Qc':                           9000,       # resonator coupling quality factor
 
                     # waveform parameters
-                    'operations':                   dict(qubit=['const','gauss','arb_op','X180','Y180','X90','Y90'],
-                                                         rr=['const', 'readout']),
+                    'operations':                   dict(qubit=['const','gauss','arb_op','X180','Y180','X90','Y90','readout'],
+                                                         rr=['const', 'displace','readout'],
+                                                         cavity=['const', 'displace','readout']),
                     'X180_len':                       160,        # length of pi pulse in clock cycles
                     'X180_amp':                       0.45,       # amplitude of pi pulse
                     'X90_len':                          80,         # length of pi/2 pulse in clock cycles
                     'X90_amp':                          0.45,       # amplitude of pi/2 pulse
                     'gauss_len':                        48,         # length of gaussian pulse in clock cycles
-                    'amp_q':                            0.375,       # amplitude of qubit pulse, needs to be less than 0.45 to prevent overflowing 
-                    'amp_r':                            0.375,       # amplitude of readout pulse, needs to be less than 0.45
+                    'amp_q':                            0.4,       # amplitude of qubit pulse, needs to be less than 0.45 to prevent overflowing 
+                    'amp_r':                            0.4,       # amplitude of readout pulse, needs to be less than 0.45
                     'arb_op_len':                       160,        # length of arbitrary operation in clock cycles
                     }
 
@@ -143,7 +149,7 @@ class qubit():
         self.init_quantum_machine(initialize_qmm)
         self.write_pars()
         self._directory = f'G:\\Shared drives\\CavityCooling\\DARPA\\data\\{self._name}'
-        self._instruments = instruments()
+        self._instruments = instruments(name=qb)
         self.init_instruments()
         # self.make_config(self.pars)
         self.config_maker = Configuration(self)
@@ -188,6 +194,8 @@ class qubit():
                  IF_min = 10e6,
                  IF_max = 20e6,
                  attenuations = [10,30],
+                 adaptive_averaging=False,
+                 averaging_factor=1.2,
                  atten_step = 0.1,
                  savedata=True):
         """
@@ -212,6 +220,8 @@ class qubit():
             print(f'Attenuation = {a} dB')
             self._instruments.set('DA','attenuation',a)
             spec_data,job = self.resonator_spec(f_LO=self.pars['rr_LO'],IF_min=IF_min,IF_max=IF_max,df=df,showprogress=True,savedata=False,fit=False)
+            if adaptive_averaging:
+                self.update_value('n_avg',int(averaging_factor*self.pars['n_avg']))
             data['freqs'].append(np.around(spec_data['freqs']*1e-9,5))
             data['I'].append(spec_data['I'])
             data['Q'].append(spec_data['Q'])
@@ -271,7 +281,7 @@ class qubit():
         # dataPath = f'{saveDir}\\spectroscopy\\{element}_spec'
         # filename = 'data'
         # iteration = get_index_for_filename(dataPath, filename, file_format='csv')
-        iteration = counter(self._directory,self.experiment,element=element,extension='*.csv')
+        # iteration = counter(self._directory,self.experiment,element=element,extension='*.csv')
 
         freq_arr = []
         I = []
@@ -373,8 +383,8 @@ class qubit():
         freqs = np.arange(IF_min, IF_max + df/2, df, dtype=int)
         
         self.update_value('rr_LO', value = f_LO)
-        seq = sequence(self,'rr_spec',on_off=on_off,n_avg=self.pars['n_avg'], IF_min=IF_min, IF_max=IF_max, df=df,)
-        rr_spec = seq.make_resonator_spec_sequence()
+        seq = sequence(self,'rr_spec',IF_min=IF_min, IF_max=IF_max, df=df,)
+        rr_spec = seq.single_tone_spectroscopy()
 
         datadict,job = self.get_results(rr_spec,result_names=["I","Q"],progress_key='n',showprogress=showprogress)
 
@@ -505,11 +515,13 @@ class qubit():
                    saturation_dur = int(10e3),   # time qubit saturated w/ qubit tone, in ns
                    on_off =  True,          # background subtraction
                    notify = False,
+                   liveplot = True,
                    showprogress=False,
+                   simulate = False,
                    savedata=True,
                    **kwargs):         # create notification on Slack when measurement finishes
 
-        iteration = counter(self._directory,self.experiment,element='qubit',extension='*.csv')
+        # iteration = counter(self._directory,self.experiment,element='qubit',extension='*.csv')
 
         freq_arr = np.arange(IF_min, IF_max + df/2, df, dtype=int)
         saturation_dur = int(saturation_dur)
@@ -526,8 +538,104 @@ class qubit():
 
         # prog = self.make_sequence(self,on_off=on_off,saturation_dur=saturation_dur,amp_q_scaling=amp_q_scaling, IF_min=IF_min, IF_max=IF_max, df=df,)
         
-        seq = sequence(self,name='qubit_spec',on_off=on_off,saturation_dur=saturation_dur,amp_q_scaling=amp_q_scaling, IF_min=IF_min, IF_max=IF_max, df=df,)
-        prog = seq.make_qubit_spec_sequence()
+        seq = sequence(self,name='qubit_spec',on_off=on_off, saturation_dur=saturation_dur, amp_q_scaling=amp_q_scaling, IF_min=IF_min, IF_max=IF_max, df=df,target_res='qubit',readout_res='rr')
+        prog = seq.two_tone_spectroscopy()
+        # execute 'QubitSpecProg' using configuration settings in 'config'
+        # fetch averaged I and Q values that were saved
+        datadict, job = self.get_results(program = prog, 
+                                         result_names = ["I", "Q"], 
+                                         showprogress=showprogress, 
+                                         liveplot=liveplot, 
+                                         notify = notify,
+                                         simulate = simulate,
+                                         freqs=freq_arr)
+        
+        # print('qubit power')
+        # qb_power = self.get_power(sa,freq=self.pars['qubit_LO']+self.pars['qubit_IF'],reference=0,amp_q = amp_q_scaling, span=1e6,config=True,output=False)
+        # print('rr power')
+        # rr_power = self.get_power(sa,freq=self.pars['rr_LO']+self.pars['rr_IF'],reference=0,span=1e6,config=True,output=False)
+        if simulate is False:
+            I = np.array(datadict["I"])
+            Q = np.array(datadict["Q"])
+            freq_arr = np.array(freq_arr + self.pars['qubit_LO'])
+            data = dict(I=I,Q=Q,freqs=freq_arr)
+
+            
+            # print(f'Qubit Frequency: {fc*1e-9:.5f} GHz\nFWHM = {fwhm*1e-6} MHz\nkappa = {2*np.pi*fwhm*1e-6:.3f} MHz')
+
+            if savedata:
+                exp_dict = {
+                        'n_avg': n_avg,
+                            'amp_r_scale': amp_r_scaling,
+                            'amp_r_scale': amp_q_scaling ,
+                            'rr_atten': inst.get_attenuation(),
+                            'qubit_LO': self.pars['qubit_LO'],
+                        }
+                # save data
+                dataPath = f'{saveDir}\\spectroscopy\qubit_spec'
+                if not os.path.exists(dataPath):
+                    Path(dataPath).mkdir(parents=True, exist_ok=True)
+                if 'saveto' in kwargs:
+                    dataDict = {'metadata': exp_dict,
+                                'time': freq_arr,
+                                'I': I,
+                                'Q': Q,
+                                
+                        }
+                    file = kwargs.get('saveto')['file']
+                    name = kwargs.get('saveto')['name']
+                    save_datadict_to_fgroup(file,name , dataDict)
+                else:
+                    with open(f"{dataPath}\data_{iteration:03d}.csv","w") as datafile:
+                        writer = csv.writer(datafile)
+                        writer.writerow(exp_dict.keys())
+                        writer.writerow(exp_dict.values())
+                        writer.writerow(freq_arr)
+                        writer.writerow(I)
+                        writer.writerow(Q)
+        else:
+            data = datadict
+
+        return data, job;
+
+    #%%% photon-resolved-spectoscopy
+    def spectroscopy_sweep_power(self,
+                   f_LO = 5e9,
+                   IF_min = 0.1e6,          # min IF frequency
+                   IF_max = 400e6,          # max IF frequency
+                   check_mixers=False,
+                   df = 0.1e6,              # IF frequency step
+                   amp_q_scaling = 0.1,     # prefactor to scale default "const" qubit tone, amp_q
+                   saturation_dur = int(10e3),   # time qubit saturated w/ qubit tone, in ns
+                   on_off =  True,          # background subtraction
+                   notify = False,
+                   showprogress=False,
+                   savedata=True,
+                   target_res='qubit',
+                   readout_res='rr',
+                   amin = 0.1,
+                   amax = 1,
+                   **kwargs):         # create notification on Slack when measurement finishes
+
+        iteration = counter(self._directory,self.experiment,element=target_res,extension='*.csv')
+
+        freq_arr = np.arange(IF_min, IF_max + df/2, df, dtype=int)
+        saturation_dur = int(saturation_dur)
+        
+        self.update_value(f'{target_res}_LO',value = f_LO)
+
+        if check_mixers:
+            self.opt_lo_leakage(mode='coarse',element='qubit',sa_span=0.5e6,threshold=-30,plot=True)
+            self.update_value('qubit_IF',50e6)
+            self.opt_sideband(mode='coarse',element='qubit',sa_span=0.5e6,threshold=-20,plot=True)
+            self.opt_lo_leakage(mode='coarse',element='rr',sa_span=0.5e6,threshold=-30,plot=True)
+            self.update_value('rr_IF',50e6)
+            self.opt_sideband(mode='coarse',element='rr',sa_span=0.5e6,threshold=-20,plot=True)
+
+        # prog = self.make_sequence(self,on_off=on_off,saturation_dur=saturation_dur,amp_q_scaling=amp_q_scaling, IF_min=IF_min, IF_max=IF_max, df=df,)
+        
+        seq = sequence(self,name='spectroscopy-sweep-power',amin=amin,amax=amax, on_off=on_off, saturation_dur=saturation_dur, amp_q_scaling=amp_q_scaling, IF_min=IF_min, IF_max=IF_max, df=df,target_res=target_res,readout_res=readout_res)
+        prog = seq.two_tone_spectroscopy_amp_sweep()
         # execute 'QubitSpecProg' using configuration settings in 'config'
         # fetch averaged I and Q values that were saved
         datadict, job = self.get_results(jobtype = prog, result_names = ["I", "Q"], showprogress=showprogress, notify = notify)
@@ -539,7 +647,7 @@ class qubit():
 
         I = np.array(datadict["I"])
         Q = np.array(datadict["Q"])
-        freq_arr = np.array(freq_arr + self.pars['qubit_LO'])
+        freq_arr = np.array(freq_arr + self.pars[f'{target_res}_LO'])
         data = dict(I=I,Q=Q,freqs=freq_arr)
 
         
@@ -735,662 +843,7 @@ class qubit():
 
         return datadict, job, prog
 
-    #%%% make_sequence
-    def make_sequence(self,exp='rabi',IFmin=200e6, IFmax=204e6, df=50e3,var_arr=0,detuning=0,n_avg=0,amp_q_scaling=1,amp_r_scale=1,numPeriods=2,nIterations=1,n_reps=100,on_off=True,saturation_dur=int(10e3),pulse='pi', play_init_pi=True, amp_cav_scaling=0.01, amp_ffl_scaling=0.01):
-
-        
-        if exp == 'qubit-spec':
-            resettime_clk= clk(self.pars['qubit_resettime'])
-            with program() as prog:
-                n, f, I, Q = self.declare_vars([int, int, fixed, fixed])
-                update_frequency("rr", self.pars['rr_IF'])
-                I_stream, Q_stream, n_stream = self.declare_streams(stream_num=3)
-
-                if on_off:
-                    I_b, Q_b, I_tot,Q_tot = self.declare_vars([fixed,fixed, fixed, fixed])
-
-                # loop over n_avg iterations
-                with for_(n, 0, n < n_avg, n + 1):
-                    save(n,n_stream)
-                    # loop over list of IF frequencies
-                    with for_each_(f,var_arr): #with for_(*from_array(f,var_arr)):
-                        # update IF frequency going into qubit mixer
-                        update_frequency("qubit", f)
-                        # measure background
-                        if on_off:
-                            measure("readout"*amp(amp_r_scaling), "rr", None, *self.res_demod(I_b, Q_b))
-                            wait(clk(self.pars['rr_resettime']), "rr")
-                            align("rr", "qubit") # wait for operations on resonator to finish before playing qubit pulse
-                        # play qubit pulse and measure
-                        play("gauss" * amp(amp_q_scaling), "qubit", duration = clk(saturation_dur))
-                        #play('pi','qubit')
-                        play("const"*amp(amp_cav_scaling), "rr", duration=clk(saturation_dur))
-                        play('gaussian'*amp(amp_ffl_scaling), "ffl", duration=clk(saturation_dur))
-                        align("qubit", "rr") # wait for operations on resonator to finish before playing qubit pulse
-                        measure("readout"*amp(amp_r_scaling), "rr", None, *self.res_demod(I, Q))
-                        # subtract background and save to stream
-                        if on_off:
-                            assign(I_tot, I - I_b)
-                            assign(Q_tot, Q - Q_b)
-                            save(I_tot, I_stream)
-                            save(Q_tot, Q_stream)
-                        else:
-                            save(I, I_stream)
-                            save(Q, Q_stream)
-                        # wait some time before continuing to next IF frequency
-                        wait(resettime_clk, "rr")
-
-                # average data over iterations and save to stream
-                with stream_processing():
-                    I_stream.buffer(len(var_arr)).average().save('I')
-                    Q_stream.buffer(len(var_arr)).average().save('Q')
-                    n_stream.save('n')
-        
-        if exp == 'fflrr-spec':
-            resettime_clk= clk(self.pars['qubit_resettime'])
-            with program() as prog:
-                n, f, I, Q = self.declare_vars([int, int, fixed, fixed])
-                update_frequency("rr", self.pars['rr_IF'])
-                I_stream, Q_stream, n_stream = self.declare_streams(stream_num=3)
-                update_frequency("qubit", self.pars['qubit_IF'])
-                #update_frequency("ffl", self.pars['ffl_IF'])
-                # loop over n_avg iterations
-                with for_(n, 0, n < n_avg, n + 1):
-                    save(n,n_stream)
-                    # loop over list of IF frequencies
-                    with for_each_(f,var_arr): #with for_(*from_array(f,var_arr)):
-                        # update IF frequency going into qubit mixer
-                        update_frequency("ffl", f)
-                        # measure background
-                        #update_frequency("rr", f)
-                        play("readout", "rr")
-                        align("ffl", "rr")
-                        play('gaussian'*amp(amp_ffl_scaling), "ffl", duration=clk(200))
-                        align("ffl", "rr")
-                        measure("void", "rr", None,*self.res_demod(I,Q))
-                        wait(resettime_clk, "rr")
-                        save(I, I_stream)
-                        save(Q, Q_stream)
-                        
-                        
-    
-
-                # average data over iterations and save to stream
-                with stream_processing():
-                    I_stream.buffer(len(var_arr)).average().save('I')
-                    Q_stream.buffer(len(var_arr)).average().save('Q')
-                    n_stream.save('n')
-        
-        
-        if exp == 'fflqb-spec':
-            resettime_clk= clk(self.pars['qubit_resettime'])
-            with program() as prog:
-                n, f, I, Q = self.declare_vars([int, int, fixed, fixed])
-                update_frequency("rr", self.pars['rr_IF'])
-                I_stream, Q_stream, n_stream = self.declare_streams(stream_num=3)
-                update_frequency("qubit", self.pars['qubit_IF'])
-                #update_frequency("ffl", self.pars['ffl_IF'])
-                # loop over n_avg iterations
-                with for_(n, 0, n < n_avg, n + 1):
-                    save(n,n_stream)
-                    # loop over list of IF frequencies
-                    with for_each_(f,var_arr): #with for_(*from_array(f,var_arr)):
-                        # update IF frequency going into qubit mixer
-                        update_frequency("ffl", f)
-                        
-                        
-                        play('pi','qubit')
-                        align('ffl','qubit')
-                        wait(clk(60),'ffl')
-                        play('gaussian'*amp(amp_ffl_scaling), "ffl", duration=clk(10000))
-                        wait(clk(30))
-                        align("ffl","rr")
-                        measure("readout", "rr", None, *self.res_demod(I, Q))
-                        # subtract background and save to stream
-                        save(I, I_stream)
-                        save(Q, Q_stream)
-                        wait(resettime_clk, "qubit")
-                        # wait some time before continuing to next IF frequency
-                        
-
-                # average data over iterations and save to stream
-                with stream_processing():
-                    I_stream.buffer(len(var_arr)).average().save('I')
-                    Q_stream.buffer(len(var_arr)).average().save('Q')
-                    n_stream.save('n')
-
-
-        if exp == 'rabi':
-            resettime_clk= clk(self.pars['qubit_resettime'])
-            with program() as prog:
-
-                n, t, I, Q = self.declare_vars([int, int, fixed, fixed])
-
-                I_stream, Q_stream, n_stream = self.declare_streams(stream_num=3)
-                update_frequency("rr", self.pars['rr_IF'])
-                update_frequency('qubit', (self.pars['qubit_freq']-self.pars['qubit_LO']) + detuning) # sets the IF frequency of the qubit
-
-                with for_(n, 0, n < n_avg, n + 1):
-                    save(n, n_stream)
-                    with for_each_(t,var_arr):
-                        with if_(t==0):
-                            measure("readout", "rr", None, *self.res_demod(I, Q))
-                            # save(t,t_stream)
-                            save(I, I_stream)
-                            save(Q, Q_stream)
-                            wait(resettime_clk,"qubit")
-                        with else_():
-                            play("pi" * amp(amp_q_scaling), "qubit", duration=t)
-                            align("qubit", "rr")
-                            measure("readout", "rr", None, *self.res_demod(I, Q))
-                            # save(t,t_stream)
-                            save(I, I_stream)
-                            save(Q, Q_stream)
-                            wait(resettime_clk,"qubit")
-
-                with stream_processing():
-                    I_stream.buffer(len(var_arr)).average().save("I")
-                    Q_stream.buffer(len(var_arr)).average().save("Q")
-                    n_stream.save('n')
-
-
-        elif exp == 'p-rabi':
-            resettime_clk= clk(self.pars['qubit_resettime'])
-            with program() as prog:
-
-                a, n, I, Q = self.declare_vars([fixed, int, fixed, fixed])
-
-                I_stream, Q_stream, n_stream = self.declare_streams(stream_num=3)
-                update_frequency("rr", self.pars['rr_IF'])
-                update_frequency('qubit', (self.pars['qubit_freq']-self.pars['qubit_LO']) + detuning) # sets the IF frequency of the qubit
-
-                with for_(n, 0, n < n_avg, n + 1):
-                    save(n, n_stream)
-                    with for_each_(a,var_arr):  # Sweep pulse duration
-                        play('const'*amp(0.2), "ffl", duration=25)
-                        wait(10,"qubit")
-                        play(pulse * amp(a), "qubit")
-                        #align("qubit", "rr")
-                        align("ffl","rr")
-                        measure("readout", "rr", None, *self.res_demod(I, Q))
-                        save(I, I_stream)
-                        save(Q, Q_stream)
-                        wait(resettime_clk)
-                with stream_processing():
-                    I_stream.buffer(len(var_arr)).average().save("I")
-                    Q_stream.buffer(len(var_arr)).average().save("Q")
-                    n_stream.save("n")
-
-        elif exp == 'ramsey':
-            resettime_clk= clk(self.pars['qubit_resettime'])
-            with program() as prog:
-               update_frequency("rr", self.pars['rr_IF']) 
-               update_frequency('qubit', (self.pars['qubit_freq']-self.pars['qubit_LO']) + detuning)
-
-               n, t, I, Q = self.declare_vars([int, int, fixed, fixed])
-
-               I_stream,Q_stream,n_stream = self.declare_streams(stream_num=3)
-
-               with for_(n, 0, n < n_avg, n + 1):
-                   save(n, n_stream)
-                   with for_each_(t,var_arr):
-                        with if_(t==0):
-                            play("pi_half", "qubit")
-                            play("pi_half", "qubit")
-                            align("qubit","rr")
-                            measure("readout", "rr", None, *self.res_demod(I, Q))
-                            save(I, I_stream)
-                            save(Q, Q_stream)
-                            wait(resettime_clk, "qubit")
-                        with else_():
-                            play("pi_half", "qubit")
-                            wait(t, "qubit")
-                            # frame_rotation_2pi(phi, 'qubit')  # this was in Haimeng's code and was commented out by her,
-                            play("pi_half", "qubit")
-                            align("qubit","rr")
-                            measure("readout", "rr", None, *self.res_demod(I, Q))
-                            save(I, I_stream)
-                            save(Q, Q_stream)
-                            wait(resettime_clk, "qubit")
-
-               with stream_processing():
-                   I_stream.buffer(len(var_arr)).average().save("I")
-                   Q_stream.buffer(len(var_arr)).average().save("Q")
-                   n_stream.save("n")
-        elif exp == 'ramsey_chi':
-            resettime_clk= clk(self.pars['qubit_resettime'])
-            with program() as prog:
-               update_frequency("rr", self.pars['rr_IF']) 
-               update_frequency('qubit', (self.pars['qubit_freq']-self.pars['qubit_LO']) + detuning)
-
-               n, t, I, Q = self.declare_vars([int, int, fixed, fixed])
-
-               I_stream,Q_stream,n_stream = self.declare_streams(stream_num=3)
-
-               with for_(n, 0, n < n_avg, n + 1):
-                   save(n, n_stream)
-                   with for_each_(t,var_arr):
-                        with if_(t==0):
-                            play("pi_half", "qubit")
-                            play("pi_half", "qubit")
-                            align("qubit","rr")
-                            measure("readout", "rr", None, *self.res_demod(I, Q))
-                            save(I, I_stream)
-                            save(Q, Q_stream)
-                            wait(resettime_clk, "qubit")
-                        with else_():
-                            play("pi_half", "qubit")
-                            align('qubit','rr')
-                            play("readout"*amp(amp_r_scale), "rr",duration=t)
-                            align('rr','qubit')
-                            
-                            # frame_rotation_2pi(phi, 'qubit')  # this was in Haimeng's code and was commented out by her,
-                            play("pi_half", "qubit")
-                            align("qubit","rr")
-                            measure("readout", "rr", None, *self.res_demod(I, Q))
-                            save(I, I_stream)
-                            save(Q, Q_stream)
-                            wait(resettime_clk, "qubit")
-
-               with stream_processing():
-                   I_stream.buffer(len(var_arr)).average().save("I")
-                   Q_stream.buffer(len(var_arr)).average().save("Q")
-                   n_stream.save("n")
-
-        elif exp == 'echo':
-            resettime_clk= clk(self.pars['qubit_resettime'])
-            with program() as prog:
-                
-                n, t, I, Q = self.declare_vars([int, int, fixed, fixed])
-
-                I_stream,Q_stream,n_stream = self.declare_streams(stream_num=3)
-                update_frequency("rr", self.pars['rr_IF'])
-                update_frequency('qubit', (self.pars['qubit_freq']-self.pars['qubit_LO']) + detuning)
-
-                with for_(n, 0, n < n_avg, n + 1):
-                    save(n,n_stream)
-                    with for_each_(t,var_arr):
-                        with if_(t==0):
-                            play("pi_half", "qubit")
-                            play("pi", "qubit")
-                            play("pi_half", "qubit")
-                            align("qubit","rr")
-                            measure("readout", "rr", None, *self.res_demod(I, Q))
-                            save(I, I_stream)
-                            save(Q, Q_stream)
-                            wait(resettime_clk, "qubit")
-                        with else_():
-                            play("pi_half", "qubit")
-                            wait(t, "qubit")
-                            play("pi", "qubit")
-                            wait(t, "qubit")
-                            play("pi_half", "qubit")
-                            align("qubit","rr")
-                            measure("readout", "rr", None, *self.res_demod(I, Q))
-                            save(I, I_stream)
-                            save(Q, Q_stream)
-                            wait(resettime_clk, "qubit")
-
-
-                with stream_processing():
-                    I_stream.buffer(len(var_arr)).average().save("I")
-                    Q_stream.buffer(len(var_arr)).average().save("Q")
-                    n_stream.save("n")
-
-        elif exp == 'T1':
-            resettime_clk= clk(self.pars['qubit_resettime'])
-            with program() as prog:
-                
-                n, t, I, Q = self.declare_vars([int, int, fixed, fixed])
-
-                I_stream, Q_stream, n_stream = self.declare_streams(stream_num=3)
-                update_frequency("rr", self.pars['rr_IF'])
-                update_frequency('qubit', (self.pars['qubit_freq']-self.pars['qubit_LO']) + detuning)
-
-                with for_(n, 0, n < n_avg, n + 1):
-                    save(n, n_stream)
-                    with for_each_(t,var_arr):
-                        with if_(t==0):
-                            play("pi", "qubit")
-                            align("qubit", "rr")
-                            measure("readout", "rr", None,*self.res_demod(I,Q))
-                            wait(resettime_clk, "qubit")
-                            save(I, I_stream)
-                            save(Q, Q_stream)
-                        with else_():
-                            play("pi", "qubit")
-                            wait(t, 'rr')
-                            align("qubit", "rr")
-                            measure("readout", "rr", None,*self.res_demod(I,Q))
-                            wait(resettime_clk, "qubit")
-                            save(I, I_stream)
-                            save(Q, Q_stream)
-
-                with stream_processing():
-                    I_stream.buffer(len(var_arr)).average().save("I")
-                    Q_stream.buffer(len(var_arr)).average().save("Q")
-                    n_stream.save('n')
-        
-        elif exp == 'qubit_temp':
-            resettime_clk= clk(1.707*self.pars['qubit_resettime'])
-            with program() as prog:
-
-                n, t, I, Q = self.declare_vars([int, int, fixed, fixed])
-
-                I_stream, Q_stream, n_stream = self.declare_streams(stream_num=3)
-                update_frequency("rr", self.pars['rr_IF'])
-                update_frequency('qubit', (self.pars['qubit_freq']-self.pars['qubit_LO']))
-                update_frequency('qubit12', (self.pars['qubit12_IF']))
-                ##make sure mixer is calibrated properly.
-
-                with for_(n, 0, n < n_avg, n + 1):
-                    save(n, n_stream)
-                    with for_each_(t,var_arr):
-                        play("pi", "qubit", condition= play_init_pi==True)
-                        align("qubit","rr")
-                        play("pi" * amp(amp_q_scaling), "qubit12", duration=t)
-                        align()
-                        play("pi", "qubit")
-                        align("qubit","rr")
-                        measure("readout", "rr", None, *self.res_demod(I, Q))
-                        # save(t,t_stream)
-                        save(I, I_stream)
-                        save(Q, Q_stream)
-                        wait(resettime_clk)
-                        
-                with stream_processing():
-                    I_stream.buffer(len(var_arr)).average().save("I")
-                    Q_stream.buffer(len(var_arr)).average().save("Q")
-                    n_stream.save('n')
-              
-                    
-        elif exp == 'dissT1':
-            resettime_clk= clk(self.pars['diss_resettime'])
-            with program() as prog:
-
-                n, t, I, Q = self.declare_vars([int, int, fixed, fixed])
-
-                I_stream, Q_stream, n_stream = self.declare_streams(stream_num=3)
-
-                update_frequency('diss', (self.pars['diss_freq']-self.pars['diss_LO']) + detuning)
-
-                with for_(n, 0, n < n_avg, n + 1):
-                    save(n, n_stream)
-                    with for_(*from_array(t,var_arr)):
-                        with if_(t==0):
-                            play("const", "diss", duration = clk(saturation_dur))
-                            measure("readout_diss", "rr", None,*self.res_demod_diss(I,Q))
-                            wait(resettime_clk, "diss")
-                            save(I, I_stream)
-                            save(Q, Q_stream)
-                        with else_():
-                            play("const", "diss", duration = clk(saturation_dur))
-                            wait(t, 'rr')
-                            align("diss", "rr")
-                            measure("readout_diss", "rr", None,*self.res_demod_diss(I,Q))
-                            wait(resettime_clk, "diss")
-                            save(I, I_stream)
-                            save(Q, Q_stream)
-
-                with stream_processing():
-                    I_stream.buffer(len(var_arr)).average().save("I")
-                    Q_stream.buffer(len(var_arr)).average().save("Q")
-                    n_stream.save('n')
-                    
-        elif exp == 'ringdown':
-            resettime_clk= clk(self.pars['rr_resettime'])
-            with program() as prog:
-                n, t, I, Q = self.declare_vars([int, int, fixed, fixed])
-
-                I_stream, Q_stream, n_stream = self.declare_streams(stream_num=3)
-                update_frequency("rr", self.pars['rr_IF'])
-                update_frequency('qubit', (self.pars['qubit_freq']-self.pars['qubit_LO']) + detuning)
-
-                with for_(n, 0, n < n_avg, n + 1):
-                    save(n, n_stream)
-                    with for_each_(t,var_arr):
-                        play("readout", "rr")
-                        wait(t, 'rr')
-                        measure("void", "rr", None,*self.res_demod(I,Q))
-                        wait(resettime_clk)
-                        save(I, I_stream)
-                        save(Q, Q_stream)
-
-                with stream_processing():
-                    I_stream.buffer(len(var_arr)).average().save("I")
-                    Q_stream.buffer(len(var_arr)).average().save("Q")
-                    n_stream.save('n')
-                    
-        elif exp == 'ss':
-            resettime_clk = clk(self.pars['qubit_resettime'])
-            with program() as prog:
-
-                i,n,I,Iexc,Q,Qexc = self.declare_vars([int,int,fixed,fixed,fixed,fixed])
-                i_st, I_st,Q_st,I_st_exc,Q_st_exc = self.declare_streams(stream_num=5)
-                update_frequency("rr", self.pars['rr_IF'])
-                update_frequency('qubit', (self.pars['qubit_freq']-self.pars['qubit_LO']))
-                with for_(i, 0, i < nIterations, i + 1):
-                    with for_(n, 0, n < n_reps, n + 1):
-                        # do nothing
-                        align("qubit", "rr")
-                        measure("readout", "rr", None, *self.res_demod(I, Q))
-                        align('qubit','rr')
-                        wait(resettime_clk, "qubit")
-                        align('qubit','rr')
-                        # apply pi-pulse
-                        play("pi", "qubit")
-                        # play("pi_half" * amp(0.01), "qubit", duration = clk(2e3))
-                        # play("gauss"*amp(0.41/0.45), "qubit",duration=round(274*2/4))
-                        align("qubit", "rr")
-                        measure("readout", "rr", None, *self.res_demod(Iexc, Qexc))
-                        wait(resettime_clk, "qubit")
-                        save(I, I_st)
-                        save(Q, Q_st)
-                        save(Iexc, I_st_exc)
-                        save(Qexc, Q_st_exc)
-                        # save(n,N_st)
-                    save(i, i_st)
-
-                with stream_processing():
-                    # I_st.save('I')
-                    # Q_st.save('Q')
-                    # I_st_exc.save('I_exc')
-                    # Q_st_exc.save('Q_exc')
-                    # i_st.save('i')
-                    I_st.buffer(n_reps).save('I')
-                    Q_st.buffer(n_reps).save('Q')
-                    I_st_exc.buffer(n_reps).save('Iexc')
-                    Q_st_exc.buffer(n_reps).save('Qexc')
-                    i_st.save('i')
-        
-        elif exp == 'ss_cav':
-            resettime_clk = clk(self.pars['qubit_resettime'])
-            with program() as prog:
-
-                i,n,I,Iexc,Q,Qexc = self.declare_vars([int,int,fixed,fixed,fixed,fixed])
-                i_st, I_st,Q_st,I_st_exc,Q_st_exc = self.declare_streams(stream_num=5)
-                update_frequency("rr", self.pars['rr_IF'])
-                update_frequency('qubit', (self.pars['qubit_freq']-self.pars['qubit_LO']))
-                with for_(i, 0, i < nIterations, i + 1):
-                    with for_(n, 0, n < n_reps, n + 1):
-                        # do nothing
-                        align("qubit", "rr")
-                        play("readout"*amp(0.8), "rr")
-                        wait(clk(500))
-                        measure("readout", "rr", None, *self.res_demod(I, Q))
-                        align('qubit','rr')
-                        wait(resettime_clk)
-                        
-                        play("readout"*amp(0.8), "rr")
-                        wait(clk(500))
-                        align('qubit','rr')
-                        # apply pi-pulse
-                        play("pi", "qubit")
-                        # play("pi_half" * amp(0.01), "qubit", duration = clk(2e3))
-                        # play("gauss"*amp(0.41/0.45), "qubit",duration=round(274*2/4))
-                        align("qubit", "rr")
-                        measure("readout", "rr", None, *self.res_demod(Iexc, Qexc))
-                        wait(resettime_clk, "qubit")
-                        save(I, I_st)
-                        save(Q, Q_st)
-                        save(Iexc, I_st_exc)
-                        save(Qexc, Q_st_exc)
-                        # save(n,N_st)
-                    save(i, i_st)
-
-                with stream_processing():
-                    # I_st.save('I')
-                    # Q_st.save('Q')
-                    # I_st_exc.save('I_exc')
-                    # Q_st_exc.save('Q_exc')
-                    # i_st.save('i')
-                    I_st.buffer(n_reps).save('I')
-                    Q_st.buffer(n_reps).save('Q')
-                    I_st_exc.buffer(n_reps).save('Iexc')
-                    Q_st_exc.buffer(n_reps).save('Qexc')
-                    i_st.save('i')
-       
-        elif exp == 'ss_ffl':
-            resettime_clk = clk(self.pars['qubit_resettime'])
-            with program() as prog:
-
-                i,n,I,Iexc,Q,Qexc = self.declare_vars([int,int,fixed,fixed,fixed,fixed])
-                i_st, I_st,Q_st,I_st_exc,Q_st_exc = self.declare_streams(stream_num=5)
-                update_frequency("rr", self.pars['rr_IF'])
-                update_frequency('qubit', (self.pars['qubit_freq']-self.pars['qubit_LO']))
-                with for_(i, 0, i < nIterations, i + 1):
-                    with for_(n, 0, n < n_reps, n + 1):
-                        # do nothing
-                        align("qubit", "rr")
-                        play("readout"*amp(0.8), "rr")
-                        align('ffl','rr')
-                        play('gaussian'*amp(1.), "ffl", duration=clk(500))
-                        align('ffl','rr')
-                        measure("readout", "rr", None, *self.res_demod(I, Q))
-                        #align('qubit','rr')
-                        wait(resettime_clk)
-                        
-                        play("readout"*amp(0.8), "rr")
-                        align('ffl','rr')
-                        play('gaussian'*amp(1.), "ffl", duration=clk(500))
-                        align('qubit','ffl')
-                        # apply pi-pulse
-                        play("pi", "qubit")
-                        # play("pi_half" * amp(0.01), "qubit", duration = clk(2e3))
-                        # play("gauss"*amp(0.41/0.45), "qubit",duration=round(274*2/4))
-                        align("qubit", "rr")
-                        measure("readout", "rr", None, *self.res_demod(Iexc, Qexc))
-                        wait(resettime_clk, "qubit")
-                        save(I, I_st)
-                        save(Q, Q_st)
-                        save(Iexc, I_st_exc)
-                        save(Qexc, Q_st_exc)
-                        # save(n,N_st)
-                    save(i, i_st)
-
-                with stream_processing():
-                    # I_st.save('I')
-                    # Q_st.save('Q')
-                    # I_st_exc.save('I_exc')
-                    # Q_st_exc.save('Q_exc')
-                    # i_st.save('i')
-                    I_st.buffer(n_reps).save('I')
-                    Q_st.buffer(n_reps).save('Q')
-                    I_st_exc.buffer(n_reps).save('Iexc')
-                    Q_st_exc.buffer(n_reps).save('Qexc')
-                    i_st.save('i')
-
-        
-        elif exp == 'IQblob':
-            resettime_clk= clk(self.pars['qubit_resettime'])
-            with program() as prog:
-                update_frequency("rr", self.pars['rr_IF'])
-                update_frequency('qubit', (self.pars['qubit_freq']-self.pars['qubit_LO']) + detuning)
-
-                n,I,Iexc,Q,Qexc = self.declare_vars([int,fixed,fixed,fixed,fixed])
-                N_st, I_st,Q_st,I_st_exc,Q_st_exc = self.declare_streams(stream_num=5)
-
-                
-                with for_(n, 0, n < n_reps, n + 1):
-                    # do nothing
-                    wait(resettime_clk)
-                    align("qubit", "rr")
-                    measure("readout", "rr", None, *self.res_demod(I, Q))
-                    save(I, I_st)
-                    save(Q, Q_st)
-                    
-                    wait(resettime_clk)
-                    align('qubit','rr')
-                    # apply pi-pulse
-                    play("pi", "qubit")
-                    align("qubit", "rr")
-                    measure("readout", "rr", None, *self.res_demod(Iexc, Qexc))
-                    wait(resettime_clk)
-                    save(Iexc, I_st_exc)
-                    save(Qexc, Q_st_exc)
-                    save(n, N_st)
-             
-                    
-
-                with stream_processing():
-                    I_st.save_all('I')
-                    Q_st.save_all('Q')
-                    I_st_exc.save_all('Iexc')
-                    Q_st_exc.save_all('Qexc')
-                    N_st.save('n')
-        
-        
-        
-        elif exp== 'opt_rr_freq':
-            resettime_clk= clk(self.pars['qubit_resettime'])
-            freqs = np.arange(IFmin, IFmax + df/2, df)
-            with program() as prog:
-
-                n = declare(int)
-                I = declare(fixed)
-                I_st = declare_stream()
-                Q = declare(fixed)
-                Q_st = declare_stream()
-                I_exc = declare(fixed)
-                Q_exc = declare(fixed)
-                I_st_exc = declare_stream()
-                Q_st_exc = declare_stream()
-                f = declare(int)
-                distance = declare(fixed)
-                distance_st = declare_stream()
-                
-                with for_(n, 0, n < 2000, n + 1):
-                    with for_(f, IFmin, f <= IFmax, f + df):
-                        update_frequency('rr', f)
-                        
-                        align("qubit", "rr")
-                        measure("readout", "rr", None, *self.res_demod(I, Q))
-                        save(I, I_st)
-                        save(Q, Q_st)
-                        
-                        align('qubit','rr')
-                        wait(resettime_clk)
-                        align('qubit','rr')
-                        # apply pi-pulse
-                        play("pi", "qubit")
-                        align("qubit", "rr")
-                        measure("readout", "rr", None, *self.res_demod(I_exc, Q_exc))
-                        wait(resettime_clk)
-                        save(I_exc, I_st_exc)
-                        save(Q_exc, Q_st_exc)
-                        assign(distance, Math.abs(I_exc - I))
-                        save(distance, distance_st)
-                        
-                with stream_processing():
-                    I_st.save_all('I')
-                    Q_st.save_all('Q')
-                    I_st_exc.save_all('I_exc')
-                    Q_st_exc.save_all('Q_exc')
-                    distance_st.buffer(len(freqs)).average().save('distance')
-
-                    
-        
-        return prog
+  
 
             #%%% pulse_exp
     
@@ -1820,15 +1273,17 @@ class qubit():
 #%% HELPERS
 #%%% Get Results
 #%%%% get_results
-    def get_results(self,jobtype, result_names = ["I", "Q"],
+    def get_results(self,program, result_names = ["I", "Q"],
                                     progress_key = "n",
                                     showprogress = True,
                                     notify = False,
-                                    liveplot = False):
+                                    liveplot = False,
+                                    simulate = False,
+                                    freqs=None):
         """
 
         Args:
-            jobtype (QUA program): QUA program to execute.
+            program (QUA program): QUA program to execute.
             result_names (array of strings, optional): The names of the variables we want to stream. Defaults to ["I", "Q", "n"].
             showprogress (TYPE, optional): DESCRIPTION. Defaults to False.
             n_total (TYPE, optional): DESCRIPTION. Defaults to 1000.
@@ -1844,51 +1299,100 @@ class qubit():
 
         # Open Communication with the Server
         qmm = QuantumMachinesManager(host=self.pars['host'], port=self.pars['port'])
+        
+        if simulate:
+            job = qmm.simulate(config=self.config, program=program,simulate=SimulationConfig(duration=10000))
+            samples = job.get_simulated_samples()
+            wfms = dict()
+            fig, ax = plt.subplots()
+            for keys,values in self.pars['Iout'].items():
+                wfms[keys] = samples.con2.analog[values]
+                ax.plot(wfms[keys], label=f"{keys} (I)")
+            for keys,values in self.pars['Qout'].items():
+                wfms[keys] = samples.con2.analog[values]
+                ax.plot(wfms[keys], label=f"{keys} (Q)")
 
-        # execute the job and get result handles
-        qm = qmm.open_qm(self.config)
+            ax.set_xlabel('Time[ns]')
+            ax.set_ylabel('Output [V]')
+            ax.legend()
+            datadict = None
+            return datadict, job
+        else:
+            # execute the job and get result handles
+            qm = qmm.open_qm(self.config)
 
-        job = qm.execute(jobtype)
-        res_handles = job.result_handles
-
-
-        # create a dictionary with result_names as keys
-        # and their corresponding handles as values
-        handles_dict = {}
-        for name in result_names:
-            handles_dict[name] = res_handles.get(name)
-
-        # make live plot, if desired
-        if liveplot:
-            plot, ax = pf.init_IQ_plot()
-            # wait for first values to come in before continuing to run python code
-
-            I_handle = handles_dict["I"]
-
-            for handle in handles_dict.values():
-                handle.wait_for_values(1)
-                is_processing = lambda: handle.is_processing()
-            i0 = 0
-            while(I_handle.is_processing()): # while(is_processing()):
-                i = handles_dict["i"].fetch_all() # retrieve iteration value n
-                datadict = self.get_data_from_handles(handles_dict)
-                pf.plot_single_shot(datadict,axes=ax)
-
-        if showprogress:
-            n_handle = res_handles.get(progress_key)
-            make_progress_meter(n_handle, self.pars['n_avg'])
-#
-        res_handles.wait_for_all_values()
+            job = qm.execute(program)
+            res_handles = job.result_handles
 
 
-        # retrieve all values
-        datadict = self.get_data_from_handles(handles_dict)
-        # plot_IQ_blobs_plt(datadict)
+            # create a dictionary with result_names as keys
+            # and their corresponding handles as values
+            handles_dict = {}
+            for name in result_names:
+                handles_dict[name] = res_handles.get(name)
 
-        # close quantum machine
-        qmm.close_all_quantum_machines()
+            # make live plot, if desired
+            if liveplot:
+                # plot, ax = pf.init_IQ_plot()
+                # wait for first values to come in before continuing to run python code
 
-        return datadict, job
+                # I_handle = handles_dict["I"]
+
+                # for handle in handles_dict.values():
+                #     handle.wait_for_values(1)
+                #     is_processing = lambda: handle.is_processing()
+                # i0 = 0
+                
+                handles_dict['I'].wait_for_values(1)
+                handles_dict['Q'].wait_for_values(1)
+                plt.figure()
+                
+                
+
+                while res_handles.is_processing():
+                    
+                    I=handles_dict['I'].fetch_all()
+                    Q=handles_dict['Q'].fetch_all()
+                
+                    sig=I+1j*Q
+                    
+                    plt.clf()
+                    plt.subplot(2, 1, 1)
+                    plt.ylabel('Amplitude (a.u.)')
+                    plt.title(f"Spectroscopy {res_handles.get(progress_key).fetch_all()}(mag)")
+                    plt.plot(self.pars['qubit_LO']*1e-9+freqs*1e-9,np.abs(sig), label='mag')
+                    plt.subplot(2, 2, 3)
+                    plt.ylabel('Amplitude (a.u.)')
+                    plt.title(f"Spectroscopy {res_handles.get(progress_key).fetch_all()} (I)")
+                    plt.plot(self.pars['qubit_LO']*1e-9+freqs*1e-9,I, label='I', c='r')
+                    plt.subplot(2, 2, 4)
+                    plt.plot(self.pars['qubit_LO']*1e-9+freqs*1e-9,Q, label='Q',c='b')
+                    plt.xlabel('freqs (GHz)')
+                    #plt.xlabel('AMp')
+                    plt.ylabel('Amplitude (a.u.)')
+                    plt.title(f"Spectroscopy {res_handles.get(progress_key).fetch_all()}(Q)")
+                    #plt.title('Rabi')
+                    plt.grid()
+                    #plt.legend()
+                    plt.show()
+                    plt.pause(0.05)
+
+            if showprogress:
+                n_handle = res_handles.get(progress_key)
+                make_progress_meter(n_handle, self.pars['n_avg'])
+    #
+            
+            res_handles.wait_for_all_values()
+
+
+            # retrieve all values
+            datadict = self.get_data_from_handles(handles_dict)
+            # plot_IQ_blobs_plt(datadict)
+
+            # close quantum machine
+            qmm.close_all_quantum_machines()
+
+            return datadict, job
 
     def unpack_data(self,datadict, names = ["I", "Q"]):
 
@@ -1922,7 +1426,7 @@ class qubit():
 
 
     #%%%% config_sa
-    def config_sa(self, fc=5e9, sa_span=5e6, threshold = -30, bandwidth = 1e3):
+    def config_sa(self, fc=5e9, sa_span=5e6, threshold = -30, bandwidth = 1e2):
         """
         Configures settings of the spectrum analyzer
 
@@ -2164,10 +1668,10 @@ class qubit():
     #%%%%
     def init_instruments(self):
 
-        self._instruments.set('readout_LO', 'frequency', self.pars['rr_LO'])
-        self._instruments.set('readout_LO', 'output', True)
+        # self._instruments.set('readout_LO', 'frequency', self.pars['rr_LO'])
+        # self._instruments.set('readout_LO', 'output', True)
         self._instruments.set('qubit_LO', 'frequency', self.pars['qubit_LO'])
-        self._instruments.set('qubit_LO', 'power', 17)
+        self._instruments.set('qubit_LO', 'power',15)
         self._instruments.set('qubit_LO', 'output', True)
         self._instruments.set('DA', 'attenuation', self.pars['readout_atten'])
 
@@ -2312,6 +1816,8 @@ If the separation and the fidelity are good enough, gives the parameters needed 
 """
 
 
+
+
 # ###################
 # # The QUA program #
 # ###################
@@ -2421,3 +1927,661 @@ If the separation and the fidelity are good enough, gives the parameters needed 
 #     assign(count, count + 1)
 #     assign(cont_condition, ((I > threshold) & (count < 3)))
 #
+
+
+#   #%%% make_sequence
+#     def make_sequence(self,exp='rabi',IFmin=200e6, IFmax=204e6, df=50e3,var_arr=0,detuning=0,n_avg=0,amp_q_scaling=1,amp_r_scale=1,numPeriods=2,nIterations=1,n_reps=100,on_off=True,saturation_dur=int(10e3),pulse='pi', play_init_pi=True, amp_cav_scaling=0.01, amp_ffl_scaling=0.01):
+
+        
+#         if exp == 'qubit-spec':
+#             resettime_clk= clk(self.pars['qubit_resettime'])
+#             with program() as prog:
+#                 n, f, I, Q = self.declare_vars([int, int, fixed, fixed])
+#                 update_frequency("rr", self.pars['rr_IF'])
+#                 I_stream, Q_stream, n_stream = self.declare_streams(stream_num=3)
+
+#                 if on_off:
+#                     I_b, Q_b, I_tot,Q_tot = self.declare_vars([fixed,fixed, fixed, fixed])
+
+#                 # loop over n_avg iterations
+#                 with for_(n, 0, n < n_avg, n + 1):
+#                     save(n,n_stream)
+#                     # loop over list of IF frequencies
+#                     with for_each_(f,var_arr): #with for_(*from_array(f,var_arr)):
+#                         # update IF frequency going into qubit mixer
+#                         update_frequency("qubit", f)
+#                         # measure background
+#                         if on_off:
+#                             measure("readout"*amp(amp_r_scaling), "rr", None, *self.res_demod(I_b, Q_b))
+#                             wait(clk(self.pars['rr_resettime']), "rr")
+#                             align("rr", "qubit") # wait for operations on resonator to finish before playing qubit pulse
+#                         # play qubit pulse and measure
+#                         play("gauss" * amp(amp_q_scaling), "qubit", duration = clk(saturation_dur))
+#                         #play('pi','qubit')
+#                         play("const"*amp(amp_cav_scaling), "rr", duration=clk(saturation_dur))
+#                         play('gaussian'*amp(amp_ffl_scaling), "ffl", duration=clk(saturation_dur))
+#                         align("qubit", "rr") # wait for operations on resonator to finish before playing qubit pulse
+#                         measure("readout"*amp(amp_r_scaling), "rr", None, *self.res_demod(I, Q))
+#                         # subtract background and save to stream
+#                         if on_off:
+#                             assign(I_tot, I - I_b)
+#                             assign(Q_tot, Q - Q_b)
+#                             save(I_tot, I_stream)
+#                             save(Q_tot, Q_stream)
+#                         else:
+#                             save(I, I_stream)
+#                             save(Q, Q_stream)
+#                         # wait some time before continuing to next IF frequency
+#                         wait(resettime_clk, "rr")
+
+#                 # average data over iterations and save to stream
+#                 with stream_processing():
+#                     I_stream.buffer(len(var_arr)).average().save('I')
+#                     Q_stream.buffer(len(var_arr)).average().save('Q')
+#                     n_stream.save('n')
+        
+#         if exp == 'fflrr-spec':
+#             resettime_clk= clk(self.pars['qubit_resettime'])
+#             with program() as prog:
+#                 n, f, I, Q = self.declare_vars([int, int, fixed, fixed])
+#                 update_frequency("rr", self.pars['rr_IF'])
+#                 I_stream, Q_stream, n_stream = self.declare_streams(stream_num=3)
+#                 update_frequency("qubit", self.pars['qubit_IF'])
+#                 #update_frequency("ffl", self.pars['ffl_IF'])
+#                 # loop over n_avg iterations
+#                 with for_(n, 0, n < n_avg, n + 1):
+#                     save(n,n_stream)
+#                     # loop over list of IF frequencies
+#                     with for_each_(f,var_arr): #with for_(*from_array(f,var_arr)):
+#                         # update IF frequency going into qubit mixer
+#                         update_frequency("ffl", f)
+#                         # measure background
+#                         #update_frequency("rr", f)
+#                         play("readout", "rr")
+#                         align("ffl", "rr")
+#                         play('gaussian'*amp(amp_ffl_scaling), "ffl", duration=clk(200))
+#                         align("ffl", "rr")
+#                         measure("void", "rr", None,*self.res_demod(I,Q))
+#                         wait(resettime_clk, "rr")
+#                         save(I, I_stream)
+#                         save(Q, Q_stream)
+                        
+                        
+    
+
+#                 # average data over iterations and save to stream
+#                 with stream_processing():
+#                     I_stream.buffer(len(var_arr)).average().save('I')
+#                     Q_stream.buffer(len(var_arr)).average().save('Q')
+#                     n_stream.save('n')
+        
+        
+#         if exp == 'fflqb-spec':
+#             resettime_clk= clk(self.pars['qubit_resettime'])
+#             with program() as prog:
+#                 n, f, I, Q = self.declare_vars([int, int, fixed, fixed])
+#                 update_frequency("rr", self.pars['rr_IF'])
+#                 I_stream, Q_stream, n_stream = self.declare_streams(stream_num=3)
+#                 update_frequency("qubit", self.pars['qubit_IF'])
+#                 #update_frequency("ffl", self.pars['ffl_IF'])
+#                 # loop over n_avg iterations
+#                 with for_(n, 0, n < n_avg, n + 1):
+#                     save(n,n_stream)
+#                     # loop over list of IF frequencies
+#                     with for_each_(f,var_arr): #with for_(*from_array(f,var_arr)):
+#                         # update IF frequency going into qubit mixer
+#                         update_frequency("ffl", f)
+                        
+                        
+#                         play('pi','qubit')
+#                         align('ffl','qubit')
+#                         wait(clk(60),'ffl')
+#                         play('gaussian'*amp(amp_ffl_scaling), "ffl", duration=clk(10000))
+#                         wait(clk(30))
+#                         align("ffl","rr")
+#                         measure("readout", "rr", None, *self.res_demod(I, Q))
+#                         # subtract background and save to stream
+#                         save(I, I_stream)
+#                         save(Q, Q_stream)
+#                         wait(resettime_clk, "qubit")
+#                         # wait some time before continuing to next IF frequency
+                        
+
+#                 # average data over iterations and save to stream
+#                 with stream_processing():
+#                     I_stream.buffer(len(var_arr)).average().save('I')
+#                     Q_stream.buffer(len(var_arr)).average().save('Q')
+#                     n_stream.save('n')
+
+
+#         if exp == 'rabi':
+#             resettime_clk= clk(self.pars['qubit_resettime'])
+#             with program() as prog:
+
+#                 n, t, I, Q = self.declare_vars([int, int, fixed, fixed])
+
+#                 I_stream, Q_stream, n_stream = self.declare_streams(stream_num=3)
+#                 update_frequency("rr", self.pars['rr_IF'])
+#                 update_frequency('qubit', (self.pars['qubit_freq']-self.pars['qubit_LO']) + detuning) # sets the IF frequency of the qubit
+
+#                 with for_(n, 0, n < n_avg, n + 1):
+#                     save(n, n_stream)
+#                     with for_each_(t,var_arr):
+#                         with if_(t==0):
+#                             measure("readout", "rr", None, *self.res_demod(I, Q))
+#                             # save(t,t_stream)
+#                             save(I, I_stream)
+#                             save(Q, Q_stream)
+#                             wait(resettime_clk,"qubit")
+#                         with else_():
+#                             play("pi" * amp(amp_q_scaling), "qubit", duration=t)
+#                             align("qubit", "rr")
+#                             measure("readout", "rr", None, *self.res_demod(I, Q))
+#                             # save(t,t_stream)
+#                             save(I, I_stream)
+#                             save(Q, Q_stream)
+#                             wait(resettime_clk,"qubit")
+
+#                 with stream_processing():
+#                     I_stream.buffer(len(var_arr)).average().save("I")
+#                     Q_stream.buffer(len(var_arr)).average().save("Q")
+#                     n_stream.save('n')
+
+
+#         elif exp == 'p-rabi':
+#             resettime_clk= clk(self.pars['qubit_resettime'])
+#             with program() as prog:
+
+#                 a, n, I, Q = self.declare_vars([fixed, int, fixed, fixed])
+
+#                 I_stream, Q_stream, n_stream = self.declare_streams(stream_num=3)
+#                 update_frequency("rr", self.pars['rr_IF'])
+#                 update_frequency('qubit', (self.pars['qubit_freq']-self.pars['qubit_LO']) + detuning) # sets the IF frequency of the qubit
+
+#                 with for_(n, 0, n < n_avg, n + 1):
+#                     save(n, n_stream)
+#                     with for_each_(a,var_arr):  # Sweep pulse duration
+#                         play('const'*amp(0.2), "ffl", duration=25)
+#                         wait(10,"qubit")
+#                         play(pulse * amp(a), "qubit")
+#                         #align("qubit", "rr")
+#                         align("ffl","rr")
+#                         measure("readout", "rr", None, *self.res_demod(I, Q))
+#                         save(I, I_stream)
+#                         save(Q, Q_stream)
+#                         wait(resettime_clk)
+#                 with stream_processing():
+#                     I_stream.buffer(len(var_arr)).average().save("I")
+#                     Q_stream.buffer(len(var_arr)).average().save("Q")
+#                     n_stream.save("n")
+
+#         elif exp == 'ramsey':
+#             resettime_clk= clk(self.pars['qubit_resettime'])
+#             with program() as prog:
+#                update_frequency("rr", self.pars['rr_IF']) 
+#                update_frequency('qubit', (self.pars['qubit_freq']-self.pars['qubit_LO']) + detuning)
+
+#                n, t, I, Q = self.declare_vars([int, int, fixed, fixed])
+
+#                I_stream,Q_stream,n_stream = self.declare_streams(stream_num=3)
+
+#                with for_(n, 0, n < n_avg, n + 1):
+#                    save(n, n_stream)
+#                    with for_each_(t,var_arr):
+#                         with if_(t==0):
+#                             play("pi_half", "qubit")
+#                             play("pi_half", "qubit")
+#                             align("qubit","rr")
+#                             measure("readout", "rr", None, *self.res_demod(I, Q))
+#                             save(I, I_stream)
+#                             save(Q, Q_stream)
+#                             wait(resettime_clk, "qubit")
+#                         with else_():
+#                             play("pi_half", "qubit")
+#                             wait(t, "qubit")
+#                             # frame_rotation_2pi(phi, 'qubit')  # this was in Haimeng's code and was commented out by her,
+#                             play("pi_half", "qubit")
+#                             align("qubit","rr")
+#                             measure("readout", "rr", None, *self.res_demod(I, Q))
+#                             save(I, I_stream)
+#                             save(Q, Q_stream)
+#                             wait(resettime_clk, "qubit")
+
+#                with stream_processing():
+#                    I_stream.buffer(len(var_arr)).average().save("I")
+#                    Q_stream.buffer(len(var_arr)).average().save("Q")
+#                    n_stream.save("n")
+#         elif exp == 'ramsey_chi':
+#             resettime_clk= clk(self.pars['qubit_resettime'])
+#             with program() as prog:
+#                update_frequency("rr", self.pars['rr_IF']) 
+#                update_frequency('qubit', (self.pars['qubit_freq']-self.pars['qubit_LO']) + detuning)
+
+#                n, t, I, Q = self.declare_vars([int, int, fixed, fixed])
+
+#                I_stream,Q_stream,n_stream = self.declare_streams(stream_num=3)
+
+#                with for_(n, 0, n < n_avg, n + 1):
+#                    save(n, n_stream)
+#                    with for_each_(t,var_arr):
+#                         with if_(t==0):
+#                             play("pi_half", "qubit")
+#                             play("pi_half", "qubit")
+#                             align("qubit","rr")
+#                             measure("readout", "rr", None, *self.res_demod(I, Q))
+#                             save(I, I_stream)
+#                             save(Q, Q_stream)
+#                             wait(resettime_clk, "qubit")
+#                         with else_():
+#                             play("pi_half", "qubit")
+#                             align('qubit','rr')
+#                             play("readout"*amp(amp_r_scale), "rr",duration=t)
+#                             align('rr','qubit')
+                            
+#                             # frame_rotation_2pi(phi, 'qubit')  # this was in Haimeng's code and was commented out by her,
+#                             play("pi_half", "qubit")
+#                             align("qubit","rr")
+#                             measure("readout", "rr", None, *self.res_demod(I, Q))
+#                             save(I, I_stream)
+#                             save(Q, Q_stream)
+#                             wait(resettime_clk, "qubit")
+
+#                with stream_processing():
+#                    I_stream.buffer(len(var_arr)).average().save("I")
+#                    Q_stream.buffer(len(var_arr)).average().save("Q")
+#                    n_stream.save("n")
+
+#         elif exp == 'echo':
+#             resettime_clk= clk(self.pars['qubit_resettime'])
+#             with program() as prog:
+                
+#                 n, t, I, Q = self.declare_vars([int, int, fixed, fixed])
+
+#                 I_stream,Q_stream,n_stream = self.declare_streams(stream_num=3)
+#                 update_frequency("rr", self.pars['rr_IF'])
+#                 update_frequency('qubit', (self.pars['qubit_freq']-self.pars['qubit_LO']) + detuning)
+
+#                 with for_(n, 0, n < n_avg, n + 1):
+#                     save(n,n_stream)
+#                     with for_each_(t,var_arr):
+#                         with if_(t==0):
+#                             play("pi_half", "qubit")
+#                             play("pi", "qubit")
+#                             play("pi_half", "qubit")
+#                             align("qubit","rr")
+#                             measure("readout", "rr", None, *self.res_demod(I, Q))
+#                             save(I, I_stream)
+#                             save(Q, Q_stream)
+#                             wait(resettime_clk, "qubit")
+#                         with else_():
+#                             play("pi_half", "qubit")
+#                             wait(t, "qubit")
+#                             play("pi", "qubit")
+#                             wait(t, "qubit")
+#                             play("pi_half", "qubit")
+#                             align("qubit","rr")
+#                             measure("readout", "rr", None, *self.res_demod(I, Q))
+#                             save(I, I_stream)
+#                             save(Q, Q_stream)
+#                             wait(resettime_clk, "qubit")
+
+
+#                 with stream_processing():
+#                     I_stream.buffer(len(var_arr)).average().save("I")
+#                     Q_stream.buffer(len(var_arr)).average().save("Q")
+#                     n_stream.save("n")
+
+#         elif exp == 'T1':
+#             resettime_clk= clk(self.pars['qubit_resettime'])
+#             with program() as prog:
+                
+#                 n, t, I, Q = self.declare_vars([int, int, fixed, fixed])
+
+#                 I_stream, Q_stream, n_stream = self.declare_streams(stream_num=3)
+#                 update_frequency("rr", self.pars['rr_IF'])
+#                 update_frequency('qubit', (self.pars['qubit_freq']-self.pars['qubit_LO']) + detuning)
+
+#                 with for_(n, 0, n < n_avg, n + 1):
+#                     save(n, n_stream)
+#                     with for_each_(t,var_arr):
+#                         with if_(t==0):
+#                             play("pi", "qubit")
+#                             align("qubit", "rr")
+#                             measure("readout", "rr", None,*self.res_demod(I,Q))
+#                             wait(resettime_clk, "qubit")
+#                             save(I, I_stream)
+#                             save(Q, Q_stream)
+#                         with else_():
+#                             play("pi", "qubit")
+#                             wait(t, 'rr')
+#                             align("qubit", "rr")
+#                             measure("readout", "rr", None,*self.res_demod(I,Q))
+#                             wait(resettime_clk, "qubit")
+#                             save(I, I_stream)
+#                             save(Q, Q_stream)
+
+#                 with stream_processing():
+#                     I_stream.buffer(len(var_arr)).average().save("I")
+#                     Q_stream.buffer(len(var_arr)).average().save("Q")
+#                     n_stream.save('n')
+        
+#         elif exp == 'qubit_temp':
+#             resettime_clk= clk(1.707*self.pars['qubit_resettime'])
+#             with program() as prog:
+
+#                 n, t, I, Q = self.declare_vars([int, int, fixed, fixed])
+
+#                 I_stream, Q_stream, n_stream = self.declare_streams(stream_num=3)
+#                 update_frequency("rr", self.pars['rr_IF'])
+#                 update_frequency('qubit', (self.pars['qubit_freq']-self.pars['qubit_LO']))
+#                 update_frequency('qubit12', (self.pars['qubit12_IF']))
+#                 ##make sure mixer is calibrated properly.
+
+#                 with for_(n, 0, n < n_avg, n + 1):
+#                     save(n, n_stream)
+#                     with for_each_(t,var_arr):
+#                         play("pi", "qubit", condition= play_init_pi==True)
+#                         align("qubit","rr")
+#                         play("pi" * amp(amp_q_scaling), "qubit12", duration=t)
+#                         align()
+#                         play("pi", "qubit")
+#                         align("qubit","rr")
+#                         measure("readout", "rr", None, *self.res_demod(I, Q))
+#                         # save(t,t_stream)
+#                         save(I, I_stream)
+#                         save(Q, Q_stream)
+#                         wait(resettime_clk)
+                        
+#                 with stream_processing():
+#                     I_stream.buffer(len(var_arr)).average().save("I")
+#                     Q_stream.buffer(len(var_arr)).average().save("Q")
+#                     n_stream.save('n')
+              
+                    
+#         elif exp == 'dissT1':
+#             resettime_clk= clk(self.pars['diss_resettime'])
+#             with program() as prog:
+
+#                 n, t, I, Q = self.declare_vars([int, int, fixed, fixed])
+
+#                 I_stream, Q_stream, n_stream = self.declare_streams(stream_num=3)
+
+#                 update_frequency('diss', (self.pars['diss_freq']-self.pars['diss_LO']) + detuning)
+
+#                 with for_(n, 0, n < n_avg, n + 1):
+#                     save(n, n_stream)
+#                     with for_(*from_array(t,var_arr)):
+#                         with if_(t==0):
+#                             play("const", "diss", duration = clk(saturation_dur))
+#                             measure("readout_diss", "rr", None,*self.res_demod_diss(I,Q))
+#                             wait(resettime_clk, "diss")
+#                             save(I, I_stream)
+#                             save(Q, Q_stream)
+#                         with else_():
+#                             play("const", "diss", duration = clk(saturation_dur))
+#                             wait(t, 'rr')
+#                             align("diss", "rr")
+#                             measure("readout_diss", "rr", None,*self.res_demod_diss(I,Q))
+#                             wait(resettime_clk, "diss")
+#                             save(I, I_stream)
+#                             save(Q, Q_stream)
+
+#                 with stream_processing():
+#                     I_stream.buffer(len(var_arr)).average().save("I")
+#                     Q_stream.buffer(len(var_arr)).average().save("Q")
+#                     n_stream.save('n')
+                    
+#         elif exp == 'ringdown':
+#             resettime_clk= clk(self.pars['rr_resettime'])
+#             with program() as prog:
+#                 n, t, I, Q = self.declare_vars([int, int, fixed, fixed])
+
+#                 I_stream, Q_stream, n_stream = self.declare_streams(stream_num=3)
+#                 update_frequency("rr", self.pars['rr_IF'])
+#                 update_frequency('qubit', (self.pars['qubit_freq']-self.pars['qubit_LO']) + detuning)
+
+#                 with for_(n, 0, n < n_avg, n + 1):
+#                     save(n, n_stream)
+#                     with for_each_(t,var_arr):
+#                         play("readout", "rr")
+#                         wait(t, 'rr')
+#                         measure("void", "rr", None,*self.res_demod(I,Q))
+#                         wait(resettime_clk)
+#                         save(I, I_stream)
+#                         save(Q, Q_stream)
+
+#                 with stream_processing():
+#                     I_stream.buffer(len(var_arr)).average().save("I")
+#                     Q_stream.buffer(len(var_arr)).average().save("Q")
+#                     n_stream.save('n')
+                    
+#         elif exp == 'ss':
+#             resettime_clk = clk(self.pars['qubit_resettime'])
+#             with program() as prog:
+
+#                 i,n,I,Iexc,Q,Qexc = self.declare_vars([int,int,fixed,fixed,fixed,fixed])
+#                 i_st, I_st,Q_st,I_st_exc,Q_st_exc = self.declare_streams(stream_num=5)
+#                 update_frequency("rr", self.pars['rr_IF'])
+#                 update_frequency('qubit', (self.pars['qubit_freq']-self.pars['qubit_LO']))
+#                 with for_(i, 0, i < nIterations, i + 1):
+#                     with for_(n, 0, n < n_reps, n + 1):
+#                         # do nothing
+#                         align("qubit", "rr")
+#                         measure("readout", "rr", None, *self.res_demod(I, Q))
+#                         align('qubit','rr')
+#                         wait(resettime_clk, "qubit")
+#                         align('qubit','rr')
+#                         # apply pi-pulse
+#                         play("pi", "qubit")
+#                         # play("pi_half" * amp(0.01), "qubit", duration = clk(2e3))
+#                         # play("gauss"*amp(0.41/0.45), "qubit",duration=round(274*2/4))
+#                         align("qubit", "rr")
+#                         measure("readout", "rr", None, *self.res_demod(Iexc, Qexc))
+#                         wait(resettime_clk, "qubit")
+#                         save(I, I_st)
+#                         save(Q, Q_st)
+#                         save(Iexc, I_st_exc)
+#                         save(Qexc, Q_st_exc)
+#                         # save(n,N_st)
+#                     save(i, i_st)
+
+#                 with stream_processing():
+#                     # I_st.save('I')
+#                     # Q_st.save('Q')
+#                     # I_st_exc.save('I_exc')
+#                     # Q_st_exc.save('Q_exc')
+#                     # i_st.save('i')
+#                     I_st.buffer(n_reps).save('I')
+#                     Q_st.buffer(n_reps).save('Q')
+#                     I_st_exc.buffer(n_reps).save('Iexc')
+#                     Q_st_exc.buffer(n_reps).save('Qexc')
+#                     i_st.save('i')
+        
+#         elif exp == 'ss_cav':
+#             resettime_clk = clk(self.pars['qubit_resettime'])
+#             with program() as prog:
+
+#                 i,n,I,Iexc,Q,Qexc = self.declare_vars([int,int,fixed,fixed,fixed,fixed])
+#                 i_st, I_st,Q_st,I_st_exc,Q_st_exc = self.declare_streams(stream_num=5)
+#                 update_frequency("rr", self.pars['rr_IF'])
+#                 update_frequency('qubit', (self.pars['qubit_freq']-self.pars['qubit_LO']))
+#                 with for_(i, 0, i < nIterations, i + 1):
+#                     with for_(n, 0, n < n_reps, n + 1):
+#                         # do nothing
+#                         align("qubit", "rr")
+#                         play("readout"*amp(0.8), "rr")
+#                         wait(clk(500))
+#                         measure("readout", "rr", None, *self.res_demod(I, Q))
+#                         align('qubit','rr')
+#                         wait(resettime_clk)
+                        
+#                         play("readout"*amp(0.8), "rr")
+#                         wait(clk(500))
+#                         align('qubit','rr')
+#                         # apply pi-pulse
+#                         play("pi", "qubit")
+#                         # play("pi_half" * amp(0.01), "qubit", duration = clk(2e3))
+#                         # play("gauss"*amp(0.41/0.45), "qubit",duration=round(274*2/4))
+#                         align("qubit", "rr")
+#                         measure("readout", "rr", None, *self.res_demod(Iexc, Qexc))
+#                         wait(resettime_clk, "qubit")
+#                         save(I, I_st)
+#                         save(Q, Q_st)
+#                         save(Iexc, I_st_exc)
+#                         save(Qexc, Q_st_exc)
+#                         # save(n,N_st)
+#                     save(i, i_st)
+
+#                 with stream_processing():
+#                     # I_st.save('I')
+#                     # Q_st.save('Q')
+#                     # I_st_exc.save('I_exc')
+#                     # Q_st_exc.save('Q_exc')
+#                     # i_st.save('i')
+#                     I_st.buffer(n_reps).save('I')
+#                     Q_st.buffer(n_reps).save('Q')
+#                     I_st_exc.buffer(n_reps).save('Iexc')
+#                     Q_st_exc.buffer(n_reps).save('Qexc')
+#                     i_st.save('i')
+       
+#         elif exp == 'ss_ffl':
+#             resettime_clk = clk(self.pars['qubit_resettime'])
+#             with program() as prog:
+
+#                 i,n,I,Iexc,Q,Qexc = self.declare_vars([int,int,fixed,fixed,fixed,fixed])
+#                 i_st, I_st,Q_st,I_st_exc,Q_st_exc = self.declare_streams(stream_num=5)
+#                 update_frequency("rr", self.pars['rr_IF'])
+#                 update_frequency('qubit', (self.pars['qubit_freq']-self.pars['qubit_LO']))
+#                 with for_(i, 0, i < nIterations, i + 1):
+#                     with for_(n, 0, n < n_reps, n + 1):
+#                         # do nothing
+#                         align("qubit", "rr")
+#                         play("readout"*amp(0.8), "rr")
+#                         align('ffl','rr')
+#                         play('gaussian'*amp(1.), "ffl", duration=clk(500))
+#                         align('ffl','rr')
+#                         measure("readout", "rr", None, *self.res_demod(I, Q))
+#                         #align('qubit','rr')
+#                         wait(resettime_clk)
+                        
+#                         play("readout"*amp(0.8), "rr")
+#                         align('ffl','rr')
+#                         play('gaussian'*amp(1.), "ffl", duration=clk(500))
+#                         align('qubit','ffl')
+#                         # apply pi-pulse
+#                         play("pi", "qubit")
+#                         # play("pi_half" * amp(0.01), "qubit", duration = clk(2e3))
+#                         # play("gauss"*amp(0.41/0.45), "qubit",duration=round(274*2/4))
+#                         align("qubit", "rr")
+#                         measure("readout", "rr", None, *self.res_demod(Iexc, Qexc))
+#                         wait(resettime_clk, "qubit")
+#                         save(I, I_st)
+#                         save(Q, Q_st)
+#                         save(Iexc, I_st_exc)
+#                         save(Qexc, Q_st_exc)
+#                         # save(n,N_st)
+#                     save(i, i_st)
+
+#                 with stream_processing():
+#                     # I_st.save('I')
+#                     # Q_st.save('Q')
+#                     # I_st_exc.save('I_exc')
+#                     # Q_st_exc.save('Q_exc')
+#                     # i_st.save('i')
+#                     I_st.buffer(n_reps).save('I')
+#                     Q_st.buffer(n_reps).save('Q')
+#                     I_st_exc.buffer(n_reps).save('Iexc')
+#                     Q_st_exc.buffer(n_reps).save('Qexc')
+#                     i_st.save('i')
+
+        
+#         elif exp == 'IQblob':
+#             resettime_clk= clk(self.pars['qubit_resettime'])
+#             with program() as prog:
+#                 update_frequency("rr", self.pars['rr_IF'])
+#                 update_frequency('qubit', (self.pars['qubit_freq']-self.pars['qubit_LO']) + detuning)
+
+#                 n,I,Iexc,Q,Qexc = self.declare_vars([int,fixed,fixed,fixed,fixed])
+#                 N_st, I_st,Q_st,I_st_exc,Q_st_exc = self.declare_streams(stream_num=5)
+
+                
+#                 with for_(n, 0, n < n_reps, n + 1):
+#                     # do nothing
+#                     wait(resettime_clk)
+#                     align("qubit", "rr")
+#                     measure("readout", "rr", None, *self.res_demod(I, Q))
+#                     save(I, I_st)
+#                     save(Q, Q_st)
+                    
+#                     wait(resettime_clk)
+#                     align('qubit','rr')
+#                     # apply pi-pulse
+#                     play("pi", "qubit")
+#                     align("qubit", "rr")
+#                     measure("readout", "rr", None, *self.res_demod(Iexc, Qexc))
+#                     wait(resettime_clk)
+#                     save(Iexc, I_st_exc)
+#                     save(Qexc, Q_st_exc)
+#                     save(n, N_st)
+             
+                    
+
+#                 with stream_processing():
+#                     I_st.save_all('I')
+#                     Q_st.save_all('Q')
+#                     I_st_exc.save_all('Iexc')
+#                     Q_st_exc.save_all('Qexc')
+#                     N_st.save('n')
+        
+        
+        
+#         elif exp== 'opt_rr_freq':
+#             resettime_clk= clk(self.pars['qubit_resettime'])
+#             freqs = np.arange(IFmin, IFmax + df/2, df)
+#             with program() as prog:
+
+#                 n = declare(int)
+#                 I = declare(fixed)
+#                 I_st = declare_stream()
+#                 Q = declare(fixed)
+#                 Q_st = declare_stream()
+#                 I_exc = declare(fixed)
+#                 Q_exc = declare(fixed)
+#                 I_st_exc = declare_stream()
+#                 Q_st_exc = declare_stream()
+#                 f = declare(int)
+#                 distance = declare(fixed)
+#                 distance_st = declare_stream()
+                
+#                 with for_(n, 0, n < 2000, n + 1):
+#                     with for_(f, IFmin, f <= IFmax, f + df):
+#                         update_frequency('rr', f)
+                        
+#                         align("qubit", "rr")
+#                         measure("readout", "rr", None, *self.res_demod(I, Q))
+#                         save(I, I_st)
+#                         save(Q, Q_st)
+                        
+#                         align('qubit','rr')
+#                         wait(resettime_clk)
+#                         align('qubit','rr')
+#                         # apply pi-pulse
+#                         play("pi", "qubit")
+#                         align("qubit", "rr")
+#                         measure("readout", "rr", None, *self.res_demod(I_exc, Q_exc))
+#                         wait(resettime_clk)
+#                         save(I_exc, I_st_exc)
+#                         save(Q_exc, Q_st_exc)
+#                         assign(distance, Math.abs(I_exc - I))
+#                         save(distance, distance_st)
+                        
+#                 with stream_processing():
+#                     I_st.save_all('I')
+#                     Q_st.save_all('Q')
+#                     I_st_exc.save_all('I_exc')
+#                     Q_st_exc.save_all('Q_exc')
+#                     distance_st.buffer(len(freqs)).average().save('distance')
+
+                    
+        
+#         return prog

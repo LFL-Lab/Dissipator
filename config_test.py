@@ -10,9 +10,9 @@ class Configuration:
         self._pars = qsetup.pars
         self._elements = qsetup.pars['elements']
         self._operations = qsetup.pars['operations']
-        self._pulses = ['const_pulse', 'X180_pulse', 'Y180_pulse', 'X90_pulse', 'Y90_pulse', 'gaussian_pulse', 'readout_pulse', 'arb_pulse','displace_pulse']
+        self._pulses = ['const_pulse', 'X180_pulse', 'Y180_pulse', 'X90_pulse', 'Y90_pulse', 'gaussian_pulse', 'readout_pulse', 'arb_pulse']
         self._controller = {}
-        self._waveforms = ['zero_wf', 'const_wf', 'const_wf_rr', 'gaussian_wf', 'readout_wf', 'X180_wf_I', 'X180_wf_Q', 'X90_wf_I', 'X90_wf_Q', 'displace_wf','arb_wfm']
+        self._waveforms = ['zero_wf', 'const_wf', 'const_wf_rr', 'gaussian_wf', 'readout_wf', 'X180_wf_I', 'X180_wf_Q', 'X90_wf_I', 'X90_wf_Q', 'arb_wfm']
         self._integration_weights = [ 'cos', 'sin', 'minus_sin']
         # 'cos_phi', 'sin_phi', 'minus_sin_phi',
         self._config = {}
@@ -96,6 +96,32 @@ class Configuration:
             pulse_dict[pulse] = self.add_pulse(pulse_name=pulse)
         return pulse_dict
     
+    def get_pulse_length(self, pulse_name):
+        pulse_lengths = {
+            'const_pulse': 100,
+            'gaussian_pulse': self._pars['gauss_len'],
+            'X180_pulse': self._pars['X180_len'],
+            'X90_pulse': self._pars['X90_len'],
+            'Y180_pulse': self._pars['X180_len'],
+            'Y90_pulse': self._pars['X90_len'],
+            'arb_pulse': self._pars['arb_op_len'],
+            'displace_pulse': self._pars['displace_len'],
+        }
+        return pulse_lengths.get(pulse_name)
+
+    def get_waveform_names(self, pulse_name):
+        waveform_mappings = {
+            'const_pulse': dict(I='const_wf', Q='zero_wf'),
+            'gaussian_pulse': dict(I='gaussian_wf', Q='zero_wf'),
+            'X180_pulse': dict(I='X180_wf_I', Q='X180_wf_Q'),
+            'X90_pulse': dict(I='X90_wf_I', Q='X90_wf_Q'),
+            'Y180_pulse': dict(I='X180_wf_Q', Q='X180_wf_I'),
+            'Y90_pulse': dict(I='X90_wf_Q', Q='X90_wf_I'),
+            'arb_pulse': dict(I='arb_wfm', Q='zero_wf'),
+            'displace_pulse': dict(I='displace_wf', Q='displace_wf'),
+        }
+        return waveform_mappings.get(pulse_name)
+        
     def add_pulse(self, pulse_name: str = 'const_pulse'):
 
         if pulse_name not in self._pulses:
@@ -107,33 +133,9 @@ class Configuration:
                 waveform_names = dict(I = 'readout_wf', Q = 'zero_wf')
             else:
                 operation_type = 'control'
-                if pulse_name == 'const_pulse':
-                    pulse_length = 100
-                    waveform_names = dict(I = 'const_wf', Q = 'zero_wf')
-                elif pulse_name == 'gaussian_pulse':
-                    pulse_length = self._pars['gauss_len']
-                    waveform_names = dict(I = 'gaussian_wf', Q = 'zero_wf')
-                # elif pulse_name == 'gaussian_4ns_pulse':
-                #     waveform_names = dict(I = 'gaussian_4ns_wf', Q = 'zero_wf')
-                elif pulse_name == 'X180_pulse':
-                    pulse_length = self._pars['X180_len']
-                    waveform_names = dict(I = 'X180_wf_I', Q = 'X180_wf_Q')
-                elif pulse_name == 'X90_pulse':
-                    pulse_length = self._pars['X90_len']
-                    waveform_names = dict(I = 'X90_wf_I', Q = 'X90_wf_Q')
-                elif pulse_name == 'Y180_pulse':
-                    pulse_length = self._pars['X180_len']
-                    waveform_names = dict(I = 'X180_wf_Q', Q = 'X180_wf_I')
-                elif pulse_name == 'Y90_pulse':
-                    pulse_length = self._pars['X90_len']
-                    waveform_names = dict(I = 'X90_wf_Q', Q = 'X90_wf_I')
-                elif pulse_name == 'arb_pulse':
-                    pulse_length = self._pars['arb_op_len']
-                    waveform_names = dict(I = 'arb_wfm', Q = 'zero_wf')
-                elif pulse_name == 'displace_pulse':
-                    pulse_length = self._pars['displace_len']
-                    waveform_names = dict(I = 'displace_wf', Q = 'zero_wf')
-                    
+                pulse_length = self.get_pulse_length(pulse_name)
+                waveform_names = self.get_waveform_names(pulse_name)
+
         # print(pulse_name,pulse_length)
         assert isinstance(pulse_length, int), 'Pulse length must be an integer'
         assert pulse_length >= 16, 'Pulse length must be greater than 16 ns'
@@ -161,30 +163,29 @@ class Configuration:
         return operation_dict
 
     def select_pulse_name(self, element: str = 'qubit', operation_name:str = 'const'):
-        # print(element, operation_name)
+    
         if operation_name not in self._pars['operations'][element]:
             raise ValueError(f'Operation {operation_name} not found in operations for {element}')
         else:
-            if operation_name == 'const':
-                operation_pulse = 'const_pulse'
-            elif operation_name == 'gauss':
-                operation_pulse = 'gaussian_pulse'
-            elif operation_name == 'gauss_4ns':
-                operation_pulse = 'gaussian_4ns_pulse'
-            elif operation_name == 'X180':
-                operation_pulse = 'X180_pulse'
-            elif operation_name == 'X90':
-                operation_pulse = 'X90_pulse'
-            elif operation_name == 'Y180':
-                operation_pulse = 'Y180_pulse'
-            elif operation_name == 'Y90':
-                operation_pulse = 'Y90_pulse'
-            elif operation_name == 'readout':
-                operation_pulse = 'readout_pulse'
-            elif operation_name == 'arb_op':
-                operation_pulse = 'arb_pulse'    
-            elif operation_name == 'displace':
-                operation_pulse = 'displace_pulse'
+            operation_pulse = operation_name + '_pulse'
+            # if operation_name == 'const':
+            #     operation_pulse = 'const_pulse'
+            # elif operation_name == 'gauss':
+            #     operation_pulse = 'gaussian_pulse'
+            # elif operation_name == 'gauss_4ns':
+            #     operation_pulse = 'gaussian_4ns_pulse'
+            # elif operation_name == 'X180':
+            #     operation_pulse = 'X180_pulse'
+            # elif operation_name == 'X90':
+            #     operation_pulse = 'X90_pulse'
+            # elif operation_name == 'Y180':
+            #     operation_pulse = 'Y180_pulse'
+            # elif operation_name == 'Y90':
+            #     operation_pulse = 'Y90_pulse'
+            # elif operation_name == 'readout':
+            #     operation_pulse = 'readout_pulse'
+            # elif operation_name == 'arb_op':
+            #     operation_pulse = 'arb_pulse'    
 
         return operation_pulse
            
@@ -196,50 +197,31 @@ class Configuration:
     
     def add_waveform(self, wfm_name: str = ''):
 
+        waveform_mapping = {
+            "zero_wf": ('constant', 0.0),
+            "const_wf": ('constant', self._pars['amp_q']),
+            "const_wf_rr": ('constant', self._pars['amp_r']),
+            "gaussian_wf": ('arbitrary', [float(arg) for arg in self._pars['gauss_amp'] * gaussian(self._pars['gauss_len'], self._pars['gauss_len']/5)]),
+            "readout_wf": ('constant', self._pars['amp_r']),
+            "X180_wf_I": ('arbitrary', [float(arg) for arg in self._pars['X180_amp'] * gaussian(self._pars['X180_len'], self._pars['X180_len']/5)]),
+            "X180_wf_Q": ('constant', 0.0),
+            "X90_wf_I": ('arbitrary', [float(arg) for arg in self._pars['X90_amp'] * gaussian(self._pars['X90_len'], self._pars['X90_len']/5)]),
+            "X90_wf_Q": ('constant', 0.0),
+            "displace_wf": {"type": "arbitrary", "samples": self._pars['displace_amp'] * gaussian(self._pars['displace_len'], self._pars['displace_sigma'])},
+            "arb_wfm": ('arbitrary', [0.2]*self._pars['arb_op_len'])
+        }
+
         if wfm_name not in self._waveforms:
             raise ValueError(f'Invalid waveform name! Waveform {wfm_name} not found in list of available waveforms')
         else:
-            if wfm_name == "zero_wf":
-                waveform_type = 'constant'
-                sample = 0.0
-            elif wfm_name == "const_wf":
-                waveform_type = 'constant'
-                sample = self._pars['amp_q']
-            elif wfm_name == "const_wf_rr":
-                waveform_type = 'constant'
-                sample = self._pars['amp_r']
-            elif wfm_name == "gaussian_wf":
-                waveform_type = 'arbitrary'
-                samples = [float(arg) for arg in self._pars['gauss_amp'] * gaussian(self._pars['gauss_len'], self._pars['gauss_len']/5)]
-            # elif wfm_name == "gaussian_4ns_wf":
-            #     waveform_type = 'arbitrary'
-            #     samples = gauss_wf_4ns
-            elif wfm_name == "readout_wf":
-                waveform_type = 'constant'
-                sample = self._pars['amp_r']
-            elif wfm_name == "X180_wf_I":
-                waveform_type = 'arbitrary'
-                samples = [float(arg) for arg in self._pars['X180_amp'] * gaussian(self._pars['X180_len'], self._pars['X180_len']/5)]
-            elif wfm_name == "X180_wf_Q":
-                waveform_type = 'constant'
-                sample = 0.0
-            elif wfm_name == "X90_wf_I":
-                waveform_type = 'arbitrary'
-                samples = [float(arg) for arg in self._pars['X90_amp'] * gaussian(self._pars['X90_len'], self._pars['X90_len']/5)]
-            elif wfm_name == "X90_wf_Q":
-                waveform_type = 'constant'
-                sample = 0.0
-            elif wfm_name == "arb_wfm":
-                waveform_type = 'arbitrary'
-                samples = [0.2]*self._pars['arb_op_len']
-            elif wfm_name == "displace_wf":
-                waveform_type = 'arbitrary'
-                samples = [float(arg) for arg in self._pars['displace_amp'] * gaussian(self._pars['displace_len'], self._pars['displace_len']/5)]
+            waveform_type, waveform_data = waveform_mapping.get(wfm_name)
 
         if waveform_type == "constant":
-            waveform = dict(type=waveform_type, sample=sample)
+            waveform = dict(type=waveform_type, sample=waveform_data)
         elif waveform_type == "arbitrary":
-            waveform = dict(type=waveform_type, samples=samples)
+            waveform = dict(type=waveform_type, samples=waveform_data)
+
+        return waveform
 
         return waveform
     
@@ -255,24 +237,17 @@ class Configuration:
         if weight_name not in self._integration_weights:
             raise ValueError(f'Invalid integration weight name! Weight {weight_name} not found in list of available weights')
         else:
-            if weight_name == "cos_phi":
-                cosine = [(np.cos(self._pars['IQ_rotation']), self._pars['readout_length'])]
-                sine = [(-np.sin(self._pars['IQ_rotation']), self._pars['readout_length'])]
-            elif weight_name == "sin_phi":
-                cosine = [(np.sin(self._pars['IQ_rotation']), self._pars['readout_length'])]
-                sine = [(np.cos(self._pars['IQ_rotation']), self._pars['readout_length'])]
-            elif weight_name == "minus_sin_phi":
-                cosine = [(-np.sin(self._pars['IQ_rotation']), self._pars['readout_length'])]
-                sine = [(-np.cos(self._pars['IQ_rotation']), self._pars['readout_length'])]
-            elif weight_name == "cos":
-                cosine = [1.0] * self._pars['readout_length']
-                sine = [0.0] * self._pars['readout_length']
-            elif weight_name == "sin":
-                cosine = [0.0]* self._pars['readout_length']
-                sine = [1.0] * self._pars['readout_length']
-            elif weight_name == "minus_sin":
-                cosine = [0.0] * self._pars['readout_length']
-                sine = [-1.0] * self._pars['readout_length']
+            weight_mappings = {
+                "cos_phi": [(np.cos(self._pars['IQ_rotation']), self._pars['readout_length'])],
+                "sin_phi": [(np.sin(self._pars['IQ_rotation']), self._pars['readout_length'])],
+                "minus_sin_phi": [(-np.sin(self._pars['IQ_rotation']), self._pars['readout_length'])],
+                "cos": [1.0] * self._pars['readout_length'],
+                "sin": [0.0] * self._pars['readout_length'],
+                "minus_sin": [0.0] * self._pars['readout_length']
+            }
+
+            cosine = weight_mappings.get(weight_name, [])
+            sine = weight_mappings.get(weight_name, [])
 
         integration_weights = dict(cosine=cosine, sine=sine)
         
