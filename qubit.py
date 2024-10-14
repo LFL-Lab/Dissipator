@@ -5,11 +5,8 @@ Created on Mon Oct 4 2022
 """
 from scipy.signal.windows import gaussian
 from scipy.signal import savgol_filter
-# from waveform_tools import *
-from qm import generate_qua_script
 from qm.qua import *
-from qm import LoopbackInterface
-from qm.QuantumMachinesManager import QuantumMachinesManager
+from qm.quantum_machines_manager import QuantumMachinesManager
 from qm import SimulationConfig
 import plot_functions as pf
 import os
@@ -351,6 +348,7 @@ class qubit():
                        IF_max = 400e6,
                        df = 0.1e6,
                        showprogress=False,
+                       element='rr',
                        savedata=True,
                        on_off=False,
                        flux = None,
@@ -383,7 +381,7 @@ class qubit():
         freqs = np.arange(IF_min, IF_max + df/2, df, dtype=int)
         
         self.update_value('rr_LO', value = f_LO)
-        seq = sequence(self,'rr_spec',IF_min=IF_min, IF_max=IF_max, df=df,)
+        seq = sequence(self,'rr_spec',IF_min=IF_min, IF_max=IF_max, df=df,target_elem=element)
         rr_spec = seq.single_tone_spectroscopy()
 
         datadict,job = self.get_results(rr_spec,result_names=["I","Q"],progress_key='n',showprogress=showprogress)
@@ -522,7 +520,7 @@ class qubit():
                    **kwargs):         # create notification on Slack when measurement finishes
 
         # iteration = counter(self._directory,self.experiment,element='qubit',extension='*.csv')
-
+        
         freq_arr = np.arange(IF_min, IF_max + df/2, df, dtype=int)
         saturation_dur = int(saturation_dur)
         
@@ -536,7 +534,6 @@ class qubit():
             self.update_value('rr_IF',50e6)
             self.opt_sideband(mode='coarse',element='rr',sa_span=0.5e6,threshold=-20,plot=True)
 
-        # prog = self.make_sequence(self,on_off=on_off,saturation_dur=saturation_dur,amp_q_scaling=amp_q_scaling, IF_min=IF_min, IF_max=IF_max, df=df,)
         
         seq = sequence(self,name='qubit_spec',on_off=on_off, saturation_dur=saturation_dur, amp_q_scaling=amp_q_scaling, IF_min=IF_min, IF_max=IF_max, df=df,target_res='qubit',readout_res='rr')
         prog = seq.two_tone_spectroscopy()
@@ -782,49 +779,172 @@ class qubit():
         return I, Q, freq_arr, job;
 
     #%%% power_rabi
-    def power_rabi(self,sa = 0,
-                   a_min = 0.01,    # minimum amp_q scaling
-                   a_max = 1,     # maximum amp_q scaling
+    def power_rabi(self,
+                   amin = 0.01,    # minimum amp_q scaling
+                   amax = 1,     # maximum amp_q scaling
                    da = 0.005,       # step of amp_q
                    check_mixers = True,
-                   pulse = 'pi',
-                   n_avg = 2000,    # number of averages
-                   fit = True,
-                   plot = True,
-                   detuning = 0e6):
+                   showprogress=True,
+                   liveplot=False,
+                   notify = False,
+                   simulate=False,
+                   ):
 
-        amps = np.arange(a_min, a_max + da/2, da)
-
-        inst.set_attenuator(attenuation=self.pars['rr_atten'])
-
-        # self.check_mix_cal(sa, check = check_mixers, threshold = -55)
-
-        prog = self.make_sequence(exp = 'p-rabi', pulse = pulse,
-                                  var_arr = amps,
-                                  detuning = detuning,
-                                  n_avg = n_avg)
-        qmm = QuantumMachinesManager(host=host, port=port)
-        job = qmm.simulate(config=self.config, program=prog, simulate=SimulationConfig(duration=3000))
-        job.get_simulated_samples().con1.plot()
+        seq = sequence(self, 
+                       name = 'p-rabi', 
+                       amin = amin,
+                       amax = amax,
+                       da = da,
+                       n_avg = self.pars['n_avg']) 
         
-        datadict, job = self.get_results(jobtype = prog, result_names = ['I','Q'], showprogress = True, progress_key = 'n', n_total = n_avg)
+        prog = seq.power_rabi()
 
-        I = datadict['I']
-        Q = datadict['Q']
+        datadict, job = self.get_results(program = prog, 
+                                    result_names = ["I", "Q", "amps"], 
+                                    showprogress=showprogress, 
+                                    liveplot=liveplot, 
+                                    notify = notify,
+                                    simulate = simulate,
+                                    )
 
-        if fit:
-            fitted_pars,error = pf.fit_data(amps,np.abs(I+1j*Q),sequence='p-rabi',dt=amps[-1]/len(amps),fitFunc='rabi')
-            if plot:
-                pf.plot_data(x_vector=amps, y_vector=np.abs(I+1j*Q),sequence='p-rabi',fitted_pars=fitted_pars,
-                              qubitDriveFreq=self.pars['qubit_LO']+self.pars['qubit_IF']+detuning,savefig=False,nAverages=n_avg)
-                
-                
-        '''Update pulse amplitude'''
-        A = fitted_pars[1] #self.pars['pi_amp'] * fitted_pars[1]
+        return datadict, job
 
-        return amps, I, Q, job, A, fitted_pars
+    #%%% power_rabi
+    def time_rabi(self,
+                   tmin = 0.01,    # minimum amp_q scaling
+                   tmax = 1,     # maximum amp_q scaling
+                   dt = 0.005,       # step of amp_q
+                   check_mixers = False,
+                   showprogress=True,
+                   liveplot=False,
+                   notify = False,
+                   simulate=False,
+                   ):
 
+        nyquist_freq, highest_freq = highest_frequency(dt)
 
+        tmin, tmax, dt = convert_to_clk(tmin, tmax, dt)
+    
+        seq = sequence(self, 
+                       name = 't-rabi', 
+                       tmin = tmin,
+                       tmax = tmax,
+                       dt = dt,
+                       n_avg = self.pars['n_avg']) 
+        
+        prog = seq.time_rabi()
+
+        datadict, job = self.get_results(program = prog, 
+                                    result_names = ["I", "Q", "times"], 
+                                    showprogress=showprogress, 
+                                    liveplot=liveplot, 
+                                    notify = notify,
+                                    simulate = simulate,
+                                    )
+
+        return datadict, job
+    #%%% ramsey
+    def ramsey(self,
+                   tmin = 0.01,    
+                   tmax = 1,     
+                   dt = 0.005,       
+                   check_mixers = False,
+                   showprogress=True,
+                   liveplot=False,
+                   notify = False,
+                   simulate=False,
+                   ):
+
+        nyquist_freq, highest_freq = highest_frequency(dt)
+
+        tmin, tmax, dt = convert_to_clk(tmin, tmax, dt)
+        
+        
+
+        seq = sequence(self, 
+                       name = 'ramsey', 
+                       tmin = tmin,
+                       tmax = tmax,
+                       dt = dt,
+                       n_avg = self.pars['n_avg']) 
+        
+        prog = seq.ramsey()
+
+        datadict, job = self.get_results(program = prog, 
+                                    result_names = ["I", "Q", "times"], 
+                                    showprogress=showprogress, 
+                                    liveplot=liveplot, 
+                                    notify = notify,
+                                    simulate = simulate,
+                                    )
+        
+        return datadict, job
+    
+    #%%% echo
+    def echo(self,
+                   tmin = 0.01,    
+                   tmax = 1,     
+                   dt = 0.005,       
+                   check_mixers = False,
+                   showprogress=True,
+                   liveplot=False,
+                   notify = False,
+                   simulate=False,
+                   ):
+
+        tmin, tmax, dt = convert_to_clk(tmin, tmax, dt)        
+
+        seq = sequence(self, 
+                       name = 'echo', 
+                       tmin = tmin,
+                       tmax = tmax,
+                       dt = dt,
+                       n_avg = self.pars['n_avg']) 
+        
+        prog = seq.echo()
+
+        datadict, job = self.get_results(program = prog, 
+                                    result_names = ["I", "Q", "times"], 
+                                    showprogress=showprogress, 
+                                    liveplot=liveplot, 
+                                    notify = notify,
+                                    simulate = simulate,
+                                    )
+        
+        return datadict, job
+    
+    #%%% T1
+    def T1(self,
+        tmin = 0.01,    
+        tmax = 1,     
+        dt = 0.005,       
+        check_mixers = False,
+        showprogress=True,
+        liveplot=False,
+        notify = False,
+        simulate=False,
+        ):
+
+        tmin, tmax, dt = convert_to_clk(tmin, tmax, dt)
+        
+        seq = sequence(self, 
+                       name = 'T1', 
+                       tmin = tmin,
+                       tmax = tmax,
+                       dt = dt,
+                       n_avg = self.pars['n_avg']) 
+        
+        prog = seq.T1()
+
+        datadict, job = self.get_results(program = prog, 
+                                    result_names = ["I", "Q", "times"], 
+                                    showprogress=showprogress, 
+                                    liveplot=liveplot, 
+                                    notify = notify,
+                                    simulate = simulate,
+                                    )
+        
+        return datadict, job
     #%%% single_shot
     def single_shot(self,
                     n_reps = 1000,
@@ -1021,7 +1141,7 @@ class qubit():
             with for_(n, 0, n < self.pars['n_avg'], n + 1):
                 reset_phase("rr")
                 measure("readout", "rr", adc_st)
-                wait(self.pars['tof'], "rr")
+                wait(self.pars['resettime']['rr'], "rr")
             with stream_processing():
                 adc_st.input1().average().save("adc1")
                 adc_st.input2().average().save("adc2")
@@ -1056,7 +1176,8 @@ class qubit():
         return adc1, adc2
     
     def init_quantum_machine(self, initialize = True):
-       self.qmm = QuantumMachinesManager(host=self.pars['host'], port=self.pars['port']) if initialize else None
+    #    print(self.pars['host'], self.pars['port'])
+       self.qmm = QuantumMachinesManager(host=None, port=self.pars['port']) if initialize else None
 
 #%%% cal_pi_pulse
     def cal_pulse(self, pulse = 'pi', pulse_len_target = 20, starting_amp = 0.44, **rabi_kwargs):
@@ -1301,7 +1422,8 @@ class qubit():
         qmm = QuantumMachinesManager(host=self.pars['host'], port=self.pars['port'])
         
         if simulate:
-            job = qmm.simulate(config=self.config, program=program,simulate=SimulationConfig(duration=10000))
+            duration = int(input("Enter the duration of the simulation in us: "))
+            job = qmm.simulate(config=self.config, program=program,simulate=SimulationConfig(duration=int(duration*1e3/4)))
             samples = job.get_simulated_samples()
             wfms = dict()
             fig, ax = plt.subplots()
@@ -1375,7 +1497,7 @@ class qubit():
                     plt.grid()
                     #plt.legend()
                     plt.show()
-                    plt.pause(0.05)
+                    plt.pause(0.01)
 
             if showprogress:
                 n_handle = res_handles.get(progress_key)
@@ -1597,10 +1719,7 @@ class qubit():
             centers = self.pars[f'{element}_mixer_imbalance']
             print(f'Sideband at {round((freq)*1e-9,5)} GHz\nCurrent gain = {round(centers[0],4)}, Current phase = {round(centers[1],4)}')
 
-        
-
             # initialize sweep parameters
-        
             if mode == 'coarse':
                 span = [0.2,0.5]
                 n_steps = [10,10]
@@ -1609,7 +1728,6 @@ class qubit():
                 span = [0.05,0.1]
                 n_steps = [10,10]
                 
-            
             gain = np.linspace(centers[0]-span[0]/2, centers[0]+span[0]/2, n_steps[0])
             phase = np.linspace(centers[1]-span[1]/2, centers[1]+span[1]/2, n_steps[1])
             L1 = len(gain)

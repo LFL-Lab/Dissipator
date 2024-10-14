@@ -33,7 +33,22 @@ def make_progress_meter(n_handle, n_total):
                 progress_bar.update(Δn)
                 n0 = n
 
-        
+def convert_to_clk(tmin, tmax, dt):
+    clk = 4e-9
+    return int(tmin / clk), int(tmax / clk), int(dt / clk)
+
+def highest_frequency(dt,samples_per_period = 7):
+    
+    # Calculate the highest frequency based on the Nyquist criterion
+    nyquist_frequency = 1 / (2 * dt)
+    
+    #Calculate the highest frequency assuming at least N samples per period
+    highest_freq = 1 / (samples_per_period * dt)
+
+    print(f'Nyquist frequency: {nyquist_frequency*1e-6:.3f} MHz\nHighest frequency resolvable with at least {samples_per_period} samples per period: {highest_freq*1e-6:.3f} MHz')
+
+    return nyquist_frequency, highest_freq
+
 #%% round_to_clk
 def clk(num):
     return round(num/4)
